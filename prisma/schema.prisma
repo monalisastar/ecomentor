@@ -1,0 +1,371 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+//
+// ✅ Authentication Models
+//
+model User {
+  id               String    @id @default(cuid()) @map("_id")
+  name             String?
+  email            String    @unique
+  emailVerified    DateTime?
+  image            String?
+  password         String?
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  roles            String[]  @default(["student"]) // ["student"], ["admin"], ["lecturer"], or multiple
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // relations
+  accounts        Account[]
+  sessions        Session[]
+  enrollments     Enrollment[]
+  certificates    Certificate[]
+  userBadges      UserBadge[]
+  courses         Course[]         @relation("LecturerCourses") // courses taught by this lecturer
+  announcements   Announcement[]   // announcements made by this user
+  submissions     Submission[]     // assignment submissions (students)
+  quizAttempts    QuizAttempt[]    // quiz attempts (students)
+  examAttempts    ExamAttempt[]    // exam attempts (students)
+  payouts         Payout[]         // payouts for lecturers/admin
+  payments        Payment[]        @relation("StudentPayments") // payments made as a student
+  courseApprovals CourseApproval[] @relation("AdminApprovals")  // approvals done as an admin
+}
+
+model Account {
+  id                String  @id @default(cuid()) @map("_id")
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid()) @map("_id")
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+//
+// ✅ LMS Models
+//
+model Course {
+  id               String   @id @default(cuid()) @map("_id")
+  title            String
+  description      String
+  thumbnail        String?
+  category         String
+  level            String
+  duration         Int
+  shortDescription String
+  fullDescription  String
+  tags             String[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // ✅ lifecycle status for filtering + UI
+  status           String   @default("draft") // draft | pending_approval | published | archived
+
+  // relations
+  lecturerId    String
+  lecturer      User             @relation("LecturerCourses", fields: [lecturerId], references: [id], onDelete: Cascade)
+  modules       Module[]
+  enrollments   Enrollment[]
+  certificates  Certificate[]
+  payments      Payment[]
+  announcements Announcement[]
+  assignments   Assignment[]
+  quizzes       Quiz[]
+  exams         Exam[]
+  approvals     CourseApproval[]
+
+  @@index([lecturerId])
+  @@index([status])
+}
+
+model Module {
+  id       String  @id @default(cuid()) @map("_id")
+  title    String
+  content  String?
+  order    Int
+  courseId String
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  completions ModuleCompletion[]
+}
+
+model ModuleCompletion {
+  id           String   @id @default(cuid()) @map("_id")
+  enrollmentId String
+  moduleId     String
+  completedAt  DateTime @default(now())
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id])
+  module     Module     @relation(fields: [moduleId], references: [id])
+
+  @@index([enrollmentId])
+  @@index([moduleId])
+}
+
+model Enrollment {
+  id          String    @id @default(cuid()) @map("_id")
+  userId      String
+  courseId    String
+  progress    Float     @default(0)
+  status      String    @default("in_progress") // in_progress | completed
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  // relations
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course     Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  completions ModuleCompletion[]
+
+  @@index([userId])
+  @@index([courseId])
+}
+
+model Certificate {
+  id       String   @id @default(cuid()) @map("_id")
+  userId   String
+  courseId String
+  issuedAt DateTime @default(now())
+  url      String?
+
+  // relations
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([courseId])
+}
+
+//
+// ✅ Gamification
+//
+model Badge {
+  id        String   @id @default(cuid()) @map("_id")
+  name      String
+  icon      String?
+  criteria  String
+  createdAt DateTime @default(now())
+
+  userBadges UserBadge[]
+}
+
+model UserBadge {
+  id       String   @id @default(cuid()) @map("_id")
+  userId   String
+  badgeId  String
+  earnedAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([badgeId])
+}
+
+//
+// ✅ Payments & Admin Oversight
+//
+model Payment {
+  id         String    @id @default(cuid()) @map("_id")
+  studentId  String
+  courseId   String
+  amount     Float
+  status     String    @default("pending")
+  createdAt  DateTime  @default(now())
+  verifiedAt DateTime?
+
+  student User   @relation("StudentPayments", fields: [studentId], references: [id], onDelete: Cascade)
+  course  Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([courseId])
+}
+
+model Payout {
+  id          String    @id @default(cuid()) @map("_id")
+  lecturerId  String
+  amount      Float
+  status      String    @default("requested") // requested | approved | paid | rejected
+  requestedAt DateTime  @default(now())
+  processedAt DateTime?
+
+  lecturer User @relation(fields: [lecturerId], references: [id], onDelete: Cascade)
+
+  @@index([lecturerId])
+}
+
+model CourseApproval {
+  id         String    @id @default(cuid()) @map("_id")
+  courseId   String
+  adminId    String
+  status     String    @default("pending")
+  reviewedAt DateTime?
+
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  admin  User   @relation("AdminApprovals", fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([courseId])
+  @@index([adminId])
+}
+
+//
+// ✅ Announcements
+//
+model Announcement {
+  id        String   @id @default(cuid()) @map("_id")
+  title     String
+  message   String
+  isGlobal  Boolean  @default(false) // platform-wide announcements
+  createdAt DateTime @default(now())
+
+  // relations
+  courseId String?
+  course   Course? @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([courseId])
+  @@index([authorId])
+}
+
+//
+// ✅ Assignments & Submissions
+//
+model Assignment {
+  id          String   @id @default(cuid()) @map("_id")
+  title       String
+  description String
+  dueDate     DateTime
+  courseId    String
+  createdAt   DateTime @default(now())
+
+  course      Course       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  submissions Submission[]
+
+  @@index([courseId])
+}
+
+model Submission {
+  id           String   @id @default(cuid()) @map("_id")
+  assignmentId String
+  studentId    String
+  content      String
+  grade        Float?
+  feedback     String?  // added feedback text
+  submittedAt  DateTime @default(now())
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student    User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([assignmentId])
+}
+
+//
+// ✅ Quizzes & Exams
+//
+model Quiz {
+  id        String   @id @default(cuid()) @map("_id")
+  title     String
+  courseId  String
+  createdAt DateTime @default(now())
+
+  course    Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questions QuizQuestion[]
+  attempts  QuizAttempt[]
+
+  @@index([courseId])
+}
+
+model QuizQuestion {
+  id       String   @id @default(cuid()) @map("_id")
+  quizId   String
+  question String
+  options  String[] // multiple-choice options
+  answer   String   // correct answer
+
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@index([quizId])
+}
+
+model QuizAttempt {
+  id          String   @id @default(cuid()) @map("_id")
+  quizId      String
+  studentId   String
+  score       Float
+  feedback    String?  // added feedback
+  attemptedAt DateTime @default(now())
+
+  quiz    Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([quizId])
+}
+
+model Exam {
+  id        String   @id @default(cuid()) @map("_id")
+  title     String
+  courseId  String
+  createdAt DateTime @default(now())
+
+  course    Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  questions ExamQuestion[]
+  attempts  ExamAttempt[]
+
+  @@index([courseId])
+}
+
+model ExamQuestion {
+  id       String   @id @default(cuid()) @map("_id")
+  examId   String
+  question String
+  options  String[]
+  answer   String
+
+  exam Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  @@index([examId])
+}
+
+model ExamAttempt {
+  id          String   @id @default(cuid()) @map("_id")
+  examId      String
+  studentId   String
+  score       Float
+  feedback    String?  // added feedback
+  attemptedAt DateTime @default(now())
+
+  exam    Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([examId])
+}

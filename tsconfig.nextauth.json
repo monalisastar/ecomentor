@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "esModuleInterop": true
+  },
+  "include": [
+    "src/app/api/[...nextauth]/route.ts",
+    "src/lib/authOptions.ts",
+    "src/lib/prisma.ts",
+    "src/types/**/*.d.ts"   // ✅ include your type declarations
+  ]
+}
