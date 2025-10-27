@@ -1,6 +1,6 @@
-import React from "react";
-import { outlines, findCourseBySlug } from "@/utils/courseHelpers";
-import { courseData } from "@/data/courseData";
+import React from "react";;;
+import { outlines, findCourseBySlug } from "@/utils/courseHelpers";;;
+import { courseData } from "@/data/courseData";;;
 
 
 export default async function Page({ params }: any) {

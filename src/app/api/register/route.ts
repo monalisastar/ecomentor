@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server"
-import bcrypt from "bcryptjs"
-import prisma from "@/lib/prisma"
+import { NextResponse } from "next/server";;
+import bcrypt from "bcryptjs";;
+import prisma from "@/lib/prisma";
+
 
 const SPECIAL_EMAILS = [
   "njatabrian648@gmail.com",

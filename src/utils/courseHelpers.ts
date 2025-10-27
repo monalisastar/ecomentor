@@ -1,6 +1,6 @@
 // src/utils/courseHelpers.ts
 
-import { courseData } from "@/data/courseData"
+import { courseData } from "@/data/courseData";;
 
 
 export const findCourseBySlug = (slug: string) =>

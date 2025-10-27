@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { MessageCircle, X } from 'lucide-react'
+import { useState } from "react";;
+import { motion, AnimatePresence } from "framer-motion";;
+import { MessageCircle, X } from "lucide-react";;
 
 export default function ECOAssistant() {
   const [open, setOpen] = useState(false)

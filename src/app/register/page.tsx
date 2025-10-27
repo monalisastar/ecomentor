@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
-import Image from 'next/image'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import toast from 'react-hot-toast'
-import { motion } from 'framer-motion'
+import { useState } from "react";;
+import Image from "next/image";;
+import Link from "next/link";;
+import { useRouter } from "next/navigation";;
+import toast from "react-hot-toast";;
+import { motion } from "framer-motion";;
 
 export default function RegisterPage() {
   const [form, setForm] = useState({ name: '', email: '', password: '' })

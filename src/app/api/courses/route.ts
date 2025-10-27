@@ -1,86 +1,105 @@
-import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/authOptions"
+import { NextResponse } from "next/server"
+import prisma from "@/lib/prisma"
+import { getToken } from "next-auth/jwt"
+import type { NextRequest } from "next/server"
 
-import { socketServer } from "@/lib/socketServer"; // your socket server instance
-
-// ----------------------------
-// Helper to broadcast new course to connected admins
-// ----------------------------
-async function broadcastNewCourse(course: any) {
-  socketServer.emit("new-course-admins", {
-    courseId: course.id,
-    title: course.title,
-    lecturerId: course.lecturerId,
-    createdAt: course.createdAt,
-  });
-}
-
-// ====================
-// POST /api/courses (Lecturer/Admin creates a course)
-// ====================
-export async function POST(req: NextRequest) {
+// ✅ GET /api/courses → Fetch all or filter by search/category
+export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { searchParams } = new URL(req.url)
+    const search = searchParams.get("search")
+    const category = searchParams.get("category")
 
-    const { user } = session;
-    if (!user.roles.includes("lecturer") && !user.roles.includes("admin"))
-      return NextResponse.json({ error: "Only lecturers or admins can create courses" }, { status: 403 });
+    // 🧩 Build dynamic filters
+    const filters: any = {}
 
-    const body = await req.json();
-    const { title, description, category, level, duration, shortDescription, fullDescription, tags } = body;
+    if (search) {
+      filters.OR = [
+        { title: { contains: search, mode: "insensitive" } },
+        { description: { contains: search, mode: "insensitive" } },
+        { category: { contains: search, mode: "insensitive" } },
+      ]
+    }
 
-    if (!title || !description) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    if (category) {
+      filters.category = { equals: category, mode: "insensitive" }
+    }
 
-    const course = await prisma.course.create({
-      data: {
-        title,
-        description,
-        category,
-        level,
-        duration,
-        shortDescription,
-        fullDescription,
-        tags,
-        lecturerId: user.roles.includes("lecturer") ? user.id : null, // admin-created course may have null lecturer
+    const courses = await prisma.course.findMany({
+      where: Object.keys(filters).length > 0 ? filters : undefined,
+      include: {
+        modules: { include: { lessons: true } },
+        enrollments: true,
+        payments: true,
       },
-    });
+      orderBy: { createdAt: "desc" },
+    })
 
-    // Broadcast new course to admins
-    await broadcastNewCourse(course);
-
-    return NextResponse.json(course, { status: 201 });
+    return NextResponse.json(courses, { status: 200 })
   } catch (error) {
-    console.error("Error creating course:", error);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    console.error("Error fetching courses:", error)
+    return NextResponse.json(
+      { error: "Failed to fetch courses" },
+      { status: 500 }
+    )
   }
 }
 
-// ====================
-// GET /api/courses (Student views approved courses)
-// ====================
-export async function GET(req: NextRequest) {
+// ✅ POST /api/courses → Create new course (Lecturer/Admin only)
+export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // 🔑 Decode token (works for all protected routes)
+    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+    if (!token || !token.email)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { user } = session;
-    if (!user.roles.includes("student"))
-      return NextResponse.json({ error: "Only students can view approved courses" }, { status: 403 });
+    // 🧠 Fetch user + roles
+    const user = await prisma.user.findUnique({
+      where: { email: token.email },
+      select: { email: true, roles: true },
+    })
+    if (!user)
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
 
-    const courses = await prisma.course.findMany({
-      where: { approvals: { some: { status: "approved" } } },
-      include: {
-        lecturer: { select: { id: true, name: true, email: true } },
-        approvals: { select: { status: true, reviewedAt: true } },
+    // 🔒 Only lecturers or admins can create courses
+    if (!["lecturer", "admin"].some((r) => user.roles.includes(r))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    const body = await req.json()
+    const { title, description, image, category } = body
+
+    if (!title) {
+      return NextResponse.json(
+        { error: "Course title is required" },
+        { status: 400 }
+      )
+    }
+
+    // 🧠 Generate slug (unique + clean)
+    const slugify = (await import("slugify")).default
+    const slug =
+      slugify(title, { lower: true, strict: true }) +
+      "-" +
+      Math.random().toString(36).substring(2, 7)
+
+    const newCourse = await prisma.course.create({
+      data: {
+        title,
+        slug,
+        description: description || "",
+        image: image || "",
+        category: category || "General",
+        createdBy: user.email,
       },
-    });
+    })
 
-    return NextResponse.json(courses, { status: 200 });
+    return NextResponse.json(newCourse, { status: 201 })
   } catch (error) {
-    console.error("Error fetching approved courses:", error);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    console.error("Error creating course:", error)
+    return NextResponse.json(
+      { error: "Failed to create course" },
+      { status: 500 }
+    )
   }
 }

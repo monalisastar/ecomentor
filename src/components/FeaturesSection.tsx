@@ -6,8 +6,8 @@ import {
   HiOutlineDeviceMobile, // ✅ correct icon
   HiOutlineShieldCheck, 
   HiOutlineGlobeAlt 
-} from 'react-icons/hi'
-import { motion } from 'framer-motion'
+} from "react-icons/hi";;
+import { motion } from "framer-motion";;
 
 const features = [
   {

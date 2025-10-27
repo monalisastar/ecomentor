@@ -1,8 +1,8 @@
 'use client'
 
-import Link from 'next/link'
-import { motion } from 'framer-motion'
-import { FaLeaf } from 'react-icons/fa'
+import Link from "next/link";;
+import { motion } from "framer-motion";;
+import { FaLeaf } from "react-icons/fa";;
 
 export default function CTASection() {
   return (

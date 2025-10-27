@@ -1,8 +1,8 @@
 'use client'
 
-import { cn } from '../../../lib/utils'
+import { cn } from "@/lib/utils";;
 
-import { motion } from 'framer-motion'
+import { motion } from "framer-motion";;
 
 export function AuroraBackground({
   className,

@@ -1,8 +1,8 @@
 'use client'
 
-import { motion } from 'framer-motion'
-import { useState, useEffect } from 'react'
-import { BsShieldCheck } from 'react-icons/bs'
+import { motion } from "framer-motion";;
+import { useState, useEffect } from "react";;
+import { BsShieldCheck } from "react-icons/bs";;
 
 export default function TrustMeter() {
   const [trustLevel, setTrustLevel] = useState(0)

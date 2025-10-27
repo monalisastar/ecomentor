@@ -1,7 +1,7 @@
 'use client'
 
-import { Globe, Users, Leaf, BadgeCheck } from 'lucide-react'
-import Image from 'next/image'
+import { Globe, Users, Leaf, BadgeCheck } from "lucide-react";;
+import Image from "next/image";;
 
 const stats = [
   {

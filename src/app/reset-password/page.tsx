@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
-import { toast } from 'react-hot-toast'
-import { motion } from 'framer-motion'
+import { useState, useEffect } from "react";;
+import { useSearchParams, useRouter } from "next/navigation";;
+import { toast } from "react-hot-toast";;
+import { motion } from "framer-motion";;
 
 export default function ResetPasswordPage() {
   const searchParams = useSearchParams()

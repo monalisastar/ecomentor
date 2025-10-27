@@ -1,7 +1,7 @@
 'use client'
 
-import { motion } from 'framer-motion'
-import { FaSeedling, FaRocket, FaGlobeAfrica } from 'react-icons/fa'
+import { motion } from "framer-motion";;
+import { FaSeedling, FaRocket, FaGlobeAfrica } from "react-icons/fa";;
 
 export default function Timeline() {
   return (

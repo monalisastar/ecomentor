@@ -1,9 +1,9 @@
 "use client"
 
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { ArrowUpRight, ArrowDownRight } from "lucide-react"
-import CountUp from "react-countup"
-import { LineChart, Line, ResponsiveContainer } from "recharts"
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";;
+import { ArrowUpRight, ArrowDownRight } from "lucide-react";;
+import CountUp from "react-countup";;
+import { LineChart, Line, ResponsiveContainer } from "recharts";;
 
 export type Stat = {
   id: number

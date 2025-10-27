@@ -1,13 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState } from "react";
+import Link from "next/link";
 
-
-import { courseData } from '@/data/courseData'
-
-
-
-import { AnimatePresence, motion } from 'framer-motion'
+import { courseData } from "@/data/courseData";
+import { AnimatePresence, motion } from "framer-motion";
 
 export default function CoursesPage() {
   const categories = [
@@ -16,9 +13,10 @@ export default function CoursesPage() {
     { key: 'diplomas', label: 'Professional Diplomas' },
     { key: 'project', label: 'Carbon Projects & Technology' },
     { key: 'sectoral', label: 'Sectoral Scopes' },
-  ]
-  const [active, setActive] = useState('all')
-  const [search, setSearch] = useState('')
+  ];
+
+  const [active, setActive] = useState('all');
+  const [search, setSearch] = useState('');
 
   const groups = {
     foundational: courseData.filter(c =>
@@ -31,14 +29,14 @@ export default function CoursesPage() {
       ['carbon-projects', 'validation', 'verification', 'digital-mrv', 'climate-policy'].includes(c.slug)
     ),
     sectoral: courseData.filter(c => c.slug.startsWith('scope-')),
-  }
+  };
 
   const displayedRaw =
-    active === 'all' ? courseData : groups[active as keyof typeof groups] || []
+    active === 'all' ? courseData : groups[active as keyof typeof groups] || [];
 
   const displayed = displayedRaw.filter(c =>
     c.title.toLowerCase().includes(search.toLowerCase())
-  )
+  );
 
   return (
     <main className="relative min-h-screen bg-gradient-to-br from-[#0b1e2e] via-[#123b52] to-[#0b1e2e] text-white px-6 py-20 md:px-12">
@@ -50,10 +48,10 @@ export default function CoursesPage() {
         {/* Hero Heading */}
         <div className="text-center space-y-4">
           <h1 className="text-4xl md:text-5xl font-bold">
-            Learn Carbon Accounting. Lead the Future.
+            Explore the Carbon Credits Ecosystem. Shape the Future.
           </h1>
           <p className="text-gray-300 max-w-2xl mx-auto">
-            Explore foundational, professional, and sector-specific courses that prepare you for climate leadership.
+            Discover courses on carbon credits, carbon markets, projects, and sectoral strategies to lead in climate action.
           </p>
         </div>
 
@@ -96,25 +94,26 @@ export default function CoursesPage() {
             className="grid gap-6 sm:grid-cols-2 md:grid-cols-3"
           >
             {displayed.map(course => (
-              <motion.div
-                key={course.slug}
-                whileHover={{ scale: 1.03 }}
-                transition={{ duration: 0.2 }}
-                className="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/10 space-y-3 hover:bg-white/20 transition-all"
-              >
-                <img
-                  src={course.image}
-                  alt={course.title}
-                  className="w-full h-40 object-cover rounded-md"
-                />
-                <h3 className="font-semibold text-lg">{course.title}</h3>
-                <p className="text-sm text-gray-300">{course.description}</p>
-                {course.unlockWithAERA && (
-                  <div className="text-xs font-medium text-green-300 border border-green-400 px-2 py-1 w-max rounded-full">
-                    Unlocks with {course.unlockWithAERA} AERA
-                  </div>
-                )}
-              </motion.div>
+              <Link key={course.slug} href={`/courses/${course.slug}`}>
+                <motion.div
+                  whileHover={{ scale: 1.03 }}
+                  transition={{ duration: 0.2 }}
+                  className="cursor-pointer bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/10 space-y-3 hover:bg-white/20 transition-all"
+                >
+                  <img
+                    src={course.image}
+                    alt={course.title}
+                    className="w-full h-40 object-cover rounded-md"
+                  />
+                  <h3 className="font-semibold text-lg">{course.title}</h3>
+                  <p className="text-sm text-gray-300">{course.description}</p>
+                  {course.unlockWithAERA && (
+                    <div className="text-xs font-medium text-green-300 border border-green-400 px-2 py-1 w-max rounded-full">
+                      Unlocks with {course.unlockWithAERA} AERA
+                    </div>
+                  )}
+                </motion.div>
+              </Link>
             ))}
           </motion.div>
         </AnimatePresence>
@@ -125,7 +124,5 @@ export default function CoursesPage() {
         )}
       </div>
     </main>
-  )
+  );
 }
-
-

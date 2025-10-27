@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import Link from 'next/link'
+import { useState } from "react";;
+import { motion, AnimatePresence } from "framer-motion";;
+import Link from "next/link";;
 
 const faqs = [
   {

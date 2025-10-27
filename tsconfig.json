@@ -1,48 +1,37 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "DOM",
-      "DOM.Iterable",
-      "ESNext"
-    ],
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
     "esModuleInterop": true,
-    "module": "NodeNext",
-    "moduleResolution": "Node",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
     "jsx": "preserve",
-    "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "@lib/*": [
-        "./src/lib/*"
-      ]
-    }
+      "@/*": ["src/*"],
+      "@/lib/*": ["src/lib/*"]  // ✅ FIXED — matches your actual folder structure
+    },
+
+    "typeRoots": ["./types", "./src/types", "./node_modules/@types"],
+    "types": ["next-auth"],
+
+    "incremental": true,
+    "plugins": [{ "name": "next" }]
   },
+
   "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    "hardhat.config.ts",
     "next-env.d.ts",
-    "test/**/*.ts",
+    "src/**/*",
+    "types/**/*.d.ts",
+    "src/types/next-auth.d.ts",
     ".next/types/**/*.ts"
   ],
-  "exclude": [
-    "node_modules",
-    "scripts",
-    "ignition/modules"
-  ]
+  "exclude": ["node_modules", ".next"]
 }

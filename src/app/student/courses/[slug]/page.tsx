@@ -1,173 +1,212 @@
-"use client"
+'use client'
 
-import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
-import { Clock, Users, Star, CheckCircle } from "lucide-react"
-import { getCourseBySlug } from "@/services/api/courses"
-import { getModulesByCourse, completeModule } from "@/services/api/modules"
+import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
+import { Menu, X } from 'lucide-react'
+import { apiRequest } from '@/lib/api'
 
-type Lesson = {
-  id: string
-  title: string
-  duration: string
-  completed?: boolean
-}
-
-type Module = {
-  id: string
-  title: string
-  lessons: Lesson[]
-}
-
-type CourseDetail = {
-  slug: string
-  title: string
-  description: string
-  image: string
-  rating: number
-  learners: number
-  duration: string
-  modules: Module[]
-  enrolled: boolean
-}
+import CourseSidebar from './components/CourseSidebar'
+import CourseVideoPlayer from './components/CourseVideoPlayer'
+import CourseTabs from './components/CourseTabs'
+import LessonNextButton from './components/LessonNextButton'
 
 export default function CourseDetailPage() {
   const { slug } = useParams()
-  const router = useRouter()
-  const [course, setCourse] = useState<CourseDetail | null>(null)
+
+  const [course, setCourse] = useState<any>(null)
+  const [modules, setModules] = useState<any[]>([])
+  const [activeLesson, setActiveLesson] = useState<any>(null)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [enrollmentId, setEnrollmentId] = useState<string | null>(null)
+  const [progress, setProgress] = useState<number>(0)
 
+  // 🧠 Fetch enrollment and course data
   useEffect(() => {
-    if (!slug) return
-
-    async function fetchData() {
-      setLoading(true)
+    async function fetchCourseData() {
       try {
-        const courseData = await getCourseBySlug(slug)
-        const modulesData = await getModulesByCourse(courseData.id)
-        setCourse({ ...courseData, modules: modulesData })
-      } catch (err) {
-        console.error(err)
-        alert("Failed to fetch course")
+        setLoading(true)
+        const response = await fetch(`/api/enrollments/${slug}`)
+        const data = await response.json()
+
+        // 🚫 User not enrolled — redirect to enroll page
+        if (response.status === 403) {
+          window.location.href = `/student/courses/${slug}/enroll`
+          return
+        }
+
+        // ❌ Error responses
+        if (!response.ok) {
+          setError(data.error || 'Failed to load course')
+          return
+        }
+
+        // ✅ Enrolled user — populate data
+        const fetchedCourse = data.course
+        if (!fetchedCourse) {
+          setError('Course data unavailable')
+          return
+        }
+
+        setCourse(fetchedCourse)
+        setEnrollmentId(data.id)
+        setProgress(data.progress || 0)
+
+        const fetchedModules = fetchedCourse.modules || []
+        setModules(fetchedModules)
+
+        const firstLesson = fetchedModules[0]?.lessons?.[0]
+        if (firstLesson) setActiveLesson(firstLesson)
+      } catch (err: any) {
+        console.error('Error loading course:', err)
+        setError(err.message || 'Failed to load course')
       } finally {
         setLoading(false)
       }
     }
 
-    fetchData()
+    if (slug) fetchCourseData()
   }, [slug])
 
-  if (loading) return <p className="text-center py-20">Loading course...</p>
-  if (!course) return <p className="text-center py-20">Course not found.</p>
-
-  const handleEnroll = async () => {
+  // 🔁 Update progress when moving to next lesson
+  async function handleLessonComplete(nextLesson: any) {
+    if (!enrollmentId) return
     try {
-      await fetch(`/api/courses/${course.slug}/enroll`, { method: "POST" })
-      setCourse({ ...course, enrolled: true })
-    } catch (err) {
-      console.error(err)
-      alert("Enrollment failed")
-    }
-  }
+      const totalLessons = modules.reduce(
+        (sum, m) => sum + (m.lessons?.length || 0),
+        0
+      )
+      const completedCount =
+        modules.flatMap((m) => m.lessons || []).findIndex(
+          (l) => l.id === nextLesson.id
+        ) + 1
 
-  const handleLessonToggle = async (moduleId: string, lessonId: string) => {
-    if (!course) return
+      const newProgress = Math.min(
+        Math.round((completedCount / totalLessons) * 100),
+        100
+      )
 
-    try {
-      const updated = await completeModule(lessonId)
-      const updatedModules = course.modules.map((mod) => {
-        if (mod.id !== moduleId) return mod
-        return {
-          ...mod,
-          lessons: mod.lessons.map((lesson) =>
-            lesson.id !== lessonId ? lesson : { ...lesson, completed: true }
-          ),
-        }
+      setProgress(newProgress)
+
+      await apiRequest(`enrollments/${enrollmentId}`, 'PUT', {
+        progress: newProgress,
+        completed: newProgress === 100,
       })
-      setCourse({ ...course, modules: updatedModules })
+
+      // Switch to next lesson
+      setActiveLesson(nextLesson)
     } catch (err) {
-      console.error(err)
-      alert("Failed to update lesson progress")
+      console.error('Failed to update progress:', err)
     }
   }
 
-  const totalLessons = course.modules.reduce((acc, m) => acc + m.lessons.length, 0)
-  const completedLessons = course.modules.reduce(
-    (acc, m) => acc + m.lessons.filter((l) => l.completed).length,
-    0
-  )
-  const progress = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0
+  // ⏳ Loading
+  if (loading)
+    return (
+      <div className="min-h-screen flex items-center justify-center text-gray-600">
+        Loading course...
+      </div>
+    )
 
+  // ❌ Error
+  if (error || !course)
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center text-center text-gray-600">
+        <h2 className="text-3xl font-semibold mb-2">404 — Course Not Found</h2>
+        <p className="mb-6">{error || 'This course does not exist.'}</p>
+        <a
+          href="/student/courses"
+          className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+        >
+          Back to Courses
+        </a>
+      </div>
+    )
+
+  // 🎯 Instructor + resources
+  const instructor = {
+    name: course.instructor || 'Instructor coming soon',
+    bio: course.instructorBio || 'Instructor details will be added soon.',
+    avatar: course.instructorAvatar || '/images/default-instructor.jpg',
+  }
+
+  const resources =
+    Array.isArray(course.resources) && course.resources.length > 0
+      ? course.resources
+      : [{ title: 'Course resources will appear here soon.', url: '#' }]
+
+  // 🧭 Render Course Page
   return (
-    <main className="max-w-5xl mx-auto py-10 px-6 space-y-8">
-      {/* Hero */}
-      <div className="flex flex-col md:flex-row md:items-center gap-6">
-        <img src={course.image} alt={course.title} className="w-full md:w-64 h-40 object-cover rounded-lg shadow-lg" />
-        <div className="flex-1 space-y-3">
-          <h1 className="text-3xl font-bold">{course.title}</h1>
-          <p className="text-gray-600 dark:text-gray-300">{course.description}</p>
-          <div className="flex gap-4 text-sm text-gray-500 mt-2">
-            <span className="flex items-center gap-1"><Star size={14} className="text-yellow-500"/> {course.rating.toFixed(1)}</span>
-            <span className="flex items-center gap-1"><Users size={14}/> {course.learners.toLocaleString()} learners</span>
-            <span className="flex items-center gap-1"><Clock size={14}/> {course.duration}</span>
-          </div>
-          {!course.enrolled && (
-            <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleEnroll}>
-              Enroll Now
-            </Button>
-          )}
+    <main className="flex flex-col md:flex-row min-h-screen bg-gray-50 relative">
+      {/* 📱 Mobile Sidebar Toggle */}
+      <button
+        onClick={() => setSidebarOpen(true)}
+        className="md:hidden fixed top-4 left-4 z-50 bg-green-600 text-white rounded-md p-2 shadow-md"
+      >
+        <Menu size={22} />
+      </button>
+
+      {/* 🧭 Sidebar */}
+      <div
+        className={`fixed md:static top-0 left-0 h-full w-72 bg-white border-r border-gray-200 z-40 transition-transform duration-300 ease-in-out ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}
+      >
+        <div className="md:hidden flex justify-end p-3 border-b border-gray-200">
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="text-gray-700 hover:text-green-700"
+          >
+            <X size={20} />
+          </button>
         </div>
+
+        <CourseSidebar
+          modules={modules}
+          onSelectLesson={(lesson) => {
+            setActiveLesson(lesson)
+            setSidebarOpen(false)
+            handleLessonComplete(lesson)
+          }}
+          activeLessonId={activeLesson?.id}
+        />
       </div>
 
-      {/* Progress */}
-      {course.enrolled && (
-        <div className="mt-4">
-          <p className="text-sm text-gray-500 mb-1">Progress: {progress}% ({completedLessons}/{totalLessons} lessons completed)</p>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div className="bg-emerald-600 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
-          </div>
+      {/* 🎥 Main Content */}
+      <div className="flex-1 flex flex-col gap-6 p-6 overflow-y-auto">
+        {/* Progress bar */}
+        <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
+          <div
+            className="bg-green-600 h-3 rounded-full transition-all duration-300"
+            style={{ width: `${progress}%` }}
+          />
         </div>
-      )}
 
-      {/* Modules & Lessons */}
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle>Modules</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Accordion type="single" collapsible>
-            {course.modules.map((mod) => (
-              <AccordionItem key={mod.id} value={mod.id}>
-                <AccordionTrigger>{mod.title}</AccordionTrigger>
-                <AccordionContent>
-                  <ul className="space-y-2">
-                    {mod.lessons.map((lesson) => (
-                      <li key={lesson.id} className="flex justify-between items-center p-2 border rounded hover:bg-gray-50 cursor-pointer">
-                        <span
-                          onClick={() => router.push(`/courses/${course.slug}/lessons/${lesson.id}`)}
-                          className={`${lesson.completed ? "line-through text-gray-400" : ""}`}
-                        >
-                          {lesson.title}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-500">{lesson.duration}</span>
-                          <CheckCircle
-                            className={`cursor-pointer ${lesson.completed ? "text-emerald-600" : "text-gray-300 hover:text-emerald-500"}`}
-                            onClick={() => handleLessonToggle(mod.id, lesson.id)}
-                          />
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
-        </CardContent>
-      </Card>
+        <CourseVideoPlayer lesson={activeLesson} />
+
+        <CourseTabs
+          about={course.description || 'No description provided yet.'}
+          instructor={instructor}
+          resources={resources}
+        />
+
+        {activeLesson && (
+          <LessonNextButton
+            currentLessonId={activeLesson.id}
+            modules={modules}
+            onNext={(nextLesson: any) => handleLessonComplete(nextLesson)}
+          />
+        )}
+      </div>
+
+      {/* 🟩 Overlay for mobile */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-30 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
     </main>
   )
 }

@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import Image from 'next/image'
-import { ArrowRight } from 'lucide-react'
-import { courseData } from '../data/courseData'
+import { useEffect, useState } from "react";;
+import Link from "next/link";;
+import Image from "next/image";;
+import { ArrowRight } from "lucide-react";;
+import { courseData } from "@/data/courseData";;
 
 const ROTATE_INTERVAL = 5000
 const CARDS_PER_VIEW = 3

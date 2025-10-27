@@ -1,7 +1,7 @@
 'use client'
 
-import { motion } from 'framer-motion'
-import { FaLeaf, FaUsers, FaBrain, FaRocket } from 'react-icons/fa'
+import { motion } from "framer-motion";;
+import { FaLeaf, FaUsers, FaBrain, FaRocket } from "react-icons/fa";;
 
 export default function Philosophy() {
   const pillars = [

@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
-import { toast } from 'react-hot-toast'
+import { useState } from "react";;
+import { useRouter } from "next/navigation";;
+import { motion } from "framer-motion";;
+import { toast } from "react-hot-toast";;
 
 export default function ForgotPasswordPage() {
   const router = useRouter()

@@ -1,8 +1,8 @@
 'use client'
 
-import Image from 'next/image'
-import Link from 'next/link'
-import { ArrowDownCircle } from 'lucide-react'
+import Image from "next/image";;
+import Link from "next/link";;
+import { ArrowDownCircle } from "lucide-react";;
 
 export default function HeroSection() {
   return (

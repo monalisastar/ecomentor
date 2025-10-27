@@ -1,7 +1,7 @@
 'use client'
 
-import Image from 'next/image'
-import { Globe } from 'lucide-react'
+import Image from "next/image";;
+import { Globe } from "lucide-react";;
 
 export default function AboutEcoMentor() {
   return (

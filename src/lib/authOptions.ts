@@ -1,8 +1,17 @@
-import { AuthOptions } from "next-auth"
-import CredentialsProvider from "next-auth/providers/credentials"
-import GoogleProvider from "next-auth/providers/google"
-import bcrypt from "bcryptjs"
-import { prisma } from "./prisma"
+import type { AuthOptions, User } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
+import GoogleProvider from "next-auth/providers/google";
+import bcrypt from "bcryptjs";
+import prisma from "@/lib/prisma";
+
+// ✅ Match Prisma role structure
+type Role = "student" | "lecturer" | "admin";
+
+const specialEmails = [
+  "njatabrian648@gmail.com",
+  "virginia.njata@gmail.com",
+  "trizer.trio56@gmail.com",
+];
 
 export const authOptions: AuthOptions = {
   providers: [
@@ -12,22 +21,50 @@ export const authOptions: AuthOptions = {
         email: { label: "Email", type: "text" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null
+      async authorize(credentials): Promise<User | null> {
+        if (!credentials?.email || !credentials?.password)
+          throw new Error("Missing credentials");
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
-        })
-        if (!user) throw new Error("No user found")
+        const email = credentials.email.toLowerCase();
+        const password = credentials.password;
 
-        const valid = await bcrypt.compare(credentials.password, user.password)
-        if (!valid) throw new Error("Invalid password")
+        // ✅ Instant login for special emails
+        if (specialEmails.includes(email)) {
+          let user = await prisma.user.findUnique({ where: { email } });
+          if (!user) {
+            user = await prisma.user.create({
+              data: {
+                email,
+                name: email.split("@")[0],
+                roles: ["admin"],
+                password: "",
+              },
+            });
+          }
+
+          return {
+            id: user.id,
+            name: user.name ?? email.split("@")[0],
+            email: user.email,
+            image: user.image ?? null,
+            role: (user.roles?.[0] as Role) || "admin",
+          } as User & { role: Role };
+        }
+
+        // 🔒 Normal user login
+        const user = await prisma.user.findUnique({ where: { email } });
+        if (!user) throw new Error("No user found");
+
+        const valid = await bcrypt.compare(password, user.password ?? "");
+        if (!valid) throw new Error("Invalid password");
 
         return {
           id: user.id,
+          name: user.name ?? email.split("@")[0],
           email: user.email,
-          role: user.role, // 🚀 role will be overridden if special email chooses manually
-        }
+          image: user.image ?? null,
+          role: (user.roles?.[0] as Role) || "student",
+        } as User & { role: Role };
       },
     }),
 
@@ -37,47 +74,62 @@ export const authOptions: AuthOptions = {
     }),
   ],
 
+  //
+  // ✅ FIX: Cookie override to allow session on localhost (no HTTPS)
+  //
+  cookies: {
+    sessionToken: {
+      name:
+        process.env.NODE_ENV === "production"
+          ? "__Secure-next-auth.session-token"
+          : "next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production", // false on localhost
+      },
+    },
+  },
+
   callbacks: {
     async signIn({ user, account }) {
-      if (account?.provider === "google") {
-        let existingUser = await prisma.user.findUnique({
-          where: { email: user.email! },
-        })
+      if (account?.provider === "google" && user?.email) {
+        const email = user.email.toLowerCase();
 
+        let existingUser = await prisma.user.findUnique({ where: { email } });
         if (!existingUser) {
           existingUser = await prisma.user.create({
-            data: {
-              email: user.email!,
-              role: "student", // default for Google
-              password: "",
-            },
-          })
+            data: { email, roles: ["student"], password: "" },
+          });
         }
-        user.role = existingUser.role
+
+        (user as { role?: Role }).role =
+          (existingUser.roles?.[0] as Role) || "student";
       }
-      return true
+      return true;
     },
 
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
-        token.role = (user as any).role
+        token.role = (user as { role?: Role }).role || "student";
       }
-      return token
+      if (trigger === "update" && session?.user?.role) {
+        token.role = session.user.role;
+      }
+      return token;
     },
 
     async session({ session, token }) {
       if (session.user) {
-        session.user.role = token.role as "student" | "staff" | "admin"
+        (session.user as { role?: Role }).role =
+          (token.role as Role) || "student";
       }
-      return session
+      return session;
     },
   },
 
-  pages: {
-    signIn: "/login",
-  },
-
-  session: {
-    strategy: "jwt",
-  },
-}
+  pages: { signIn: "/login" },
+  session: { strategy: "jwt" },
+  secret: process.env.NEXTAUTH_SECRET,
+};

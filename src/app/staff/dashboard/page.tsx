@@ -1,130 +1,205 @@
 'use client'
 
-import useSWR, { mutate } from 'swr'
-import { useEffect } from 'react'
-import { useSocket } from '@/context/SocketProvider'
-
-import StaffNavbar from './components/StaffNavbar'
-import StaffSidebar from './components/StaffSidebar'
-import OverviewCard from './components/OverviewCard'
-import CourseList from './components/CourseList'
-import StudentList from './components/StudentList'
-import AssignmentPanel from './components/AssignmentPanel'
-import AnalyticsChart from './components/AnalyticsChart'
-import AnnouncementPanel from './components/AnnouncementPanel'
-
-// Fetcher
-const fetcher = (url: string) => fetch(url).then(res => res.json())
+import { useEffect, useState } from 'react'
+import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
+import { api } from '@/lib/api'
+import { GraduationCap, Award, Users, TrendingUp } from 'lucide-react'
 
 export default function StaffDashboardPage() {
-  const { socket } = useSocket() // destructured correctly
+  const { data: session, status } = useSession()
+  const router = useRouter()
 
-  // Initial SWR fetch with fallback to empty arrays
-  const { data: studentsData = [] } = useSWR<any[]>('/api/students', fetcher)
-  const { data: coursesData = [] } = useSWR<any[]>('/api/courses', fetcher)
-  const { data: assignmentsData = [] } = useSWR<any[]>('/api/assignments', fetcher)
-  const { data: analyticsData = [] } = useSWR<any[]>('/api/analytics', fetcher)
-  const { data: announcementsData = [] } = useSWR<any[]>('/api/announcements', fetcher)
+  const [stats, setStats] = useState<any>(null)
+  const [recentActivity, setRecentActivity] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // 🔔 Realtime socket listeners
+  // ✅ Ensure staff cookie is set (for middleware)
   useEffect(() => {
-    if (!socket) return
-
-    // Handlers
-    const handleStudentCreated = (student: any) => mutate('/api/students', [...(studentsData || []), student], false)
-    const handleStudentUpdated = (updated: any) => mutate('/api/students', (data: any[] = []) => data.map(s => s.id === updated.id ? updated : s), false)
-
-    const handleCourseCreated = (course: any) => mutate('/api/courses', [...(coursesData || []), course], false)
-    const handleCourseUpdated = (updated: any) => mutate('/api/courses', (data: any[] = []) => data.map(c => c.id === updated.id ? updated : c), false)
-    const handleCourseDeleted = (id: string) => mutate('/api/courses', (data: any[] = []) => data.filter(c => c.id !== id), false)
-
-    const handleAssignmentCreated = (assignment: any) => mutate('/api/assignments', [...(assignmentsData || []), assignment], false)
-    const handleAssignmentUpdated = (updated: any) => mutate('/api/assignments', (data: any[] = []) => data.map(a => a.id === updated.id ? updated : a), false)
-
-    const handleAnnouncementCreated = (announcement: any) => mutate('/api/announcements', [...(announcementsData || []), announcement], false)
-    const handleAnnouncementDeleted = (id: string) => mutate('/api/announcements', (data: any[] = []) => data.filter(a => a.id !== id), false)
-
-    // Register socket events
-    socket.on('student:created', handleStudentCreated)
-    socket.on('student:updated', handleStudentUpdated)
-    socket.on('course:created', handleCourseCreated)
-    socket.on('course:updated', handleCourseUpdated)
-    socket.on('course:deleted', handleCourseDeleted)
-    socket.on('assignment:created', handleAssignmentCreated)
-    socket.on('assignment:updated', handleAssignmentUpdated)
-    socket.on('announcement:created', handleAnnouncementCreated)
-    socket.on('announcement:deleted', handleAnnouncementDeleted)
-
-    // Cleanup
-    return () => {
-      socket.off('student:created', handleStudentCreated)
-      socket.off('student:updated', handleStudentUpdated)
-      socket.off('course:created', handleCourseCreated)
-      socket.off('course:updated', handleCourseUpdated)
-      socket.off('course:deleted', handleCourseDeleted)
-      socket.off('assignment:created', handleAssignmentCreated)
-      socket.off('assignment:updated', handleAssignmentUpdated)
-      socket.off('announcement:created', handleAnnouncementCreated)
-      socket.off('announcement:deleted', handleAnnouncementDeleted)
+    async function ensureStaffRole() {
+      try {
+        const res = await fetch('/api/set-role', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role: 'staff' }),
+        })
+        if (res.ok) {
+          console.log('✅ Staff role cookie enforced.')
+        } else {
+          console.warn('⚠️ Failed to set staff cookie.')
+        }
+      } catch (error) {
+        console.error('❌ Error setting role cookie:', error)
+      }
     }
-  }, [socket, studentsData, coursesData, assignmentsData, announcementsData])
+
+    // Only set cookie after session is confirmed authenticated
+    if (status === 'authenticated') {
+      ensureStaffRole()
+    }
+  }, [status])
+
+  // 🧠 Redirect non-staff users
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/login')
+      return
+    }
+
+    if (
+      status === 'authenticated' &&
+      !session?.user?.roles?.some((r: string) =>
+        ['admin', 'lecturer', 'staff'].includes(r)
+      )
+    ) {
+      router.push('/student/dashboard')
+    }
+  }, [status, session, router])
+
+  // 📊 Fetch overview and recent activity
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true)
+        const overview = await api.get('progress/overview')
+        setStats(overview.summary || {})
+
+        const enrollments = await api.get('enrollments')
+        const activity = enrollments.slice(0, 5).map((e: any) => ({
+          message: `${e.user?.name || 'A student'} enrolled in ${
+            e.course?.title || 'a course'
+          }`,
+          time: new Date(e.enrolledAt).toLocaleString(),
+        }))
+        setRecentActivity(activity)
+      } catch (err: any) {
+        console.error('Error loading dashboard data:', err)
+        setError('Failed to load dashboard data.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (status === 'authenticated') loadData()
+  }, [status])
+
+  // 🌀 Loading screen
+  if (loading) {
+    return (
+      <main className="flex items-center justify-center min-h-screen text-gray-500">
+        Loading staff dashboard...
+      </main>
+    )
+  }
+
+  // ❌ Error screen
+  if (error) {
+    return (
+      <main className="flex items-center justify-center min-h-screen text-red-500">
+        {error}
+      </main>
+    )
+  }
+
+  const name = session?.user?.name?.split(' ')[0] || 'Instructor'
+
+  const cards = [
+    {
+      label: 'Total Students',
+      value: stats?.totalUsers || 0,
+      icon: <Users className="text-green-600" size={22} />,
+    },
+    {
+      label: 'Total Enrollments',
+      value: stats?.totalEnrollments || 0,
+      icon: <GraduationCap className="text-green-600" size={22} />,
+    },
+    {
+      label: 'Certificates Issued',
+      value: stats?.completedEnrollments || 0,
+      icon: <Award className="text-green-600" size={22} />,
+    },
+    {
+      label: 'Avg Progress',
+      value: `${stats?.averageProgress || 0}%`,
+      icon: <TrendingUp className="text-green-600" size={22} />,
+    },
+  ]
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-b from-[#e6f3ff] to-[#cce7ff]">
-      <StaffSidebar />
+    <main className="space-y-10">
+      {/* 🌿 Header */}
+      <section>
+        <h1 className="text-3xl font-bold text-gray-900">
+          Welcome back, <span className="text-green-700">{name}</span> 👋
+        </h1>
+        <p className="text-gray-600 mt-1">
+          Here’s an overview of your teaching performance and academy activity.
+        </p>
+      </section>
 
-      <div className="flex-1 flex flex-col bg-climate-main backdrop-blur-md">
-        <StaffNavbar />
-
-        <main className="p-6 space-y-6">
-          {/* Overview */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <OverviewCard title="Total Students" value={studentsData?.length || 0} color="climate-accent" />
-            <OverviewCard title="Total Courses" value={coursesData?.length || 0} color="climate-accent" />
-            <OverviewCard title="Assignments Due" value={assignmentsData?.length || 0} color="climate-accent" />
+      {/* 📊 Stats Grid */}
+      <section className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        {cards.map((item) => (
+          <div
+            key={item.label}
+            className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition p-5 flex flex-col gap-2"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-50 rounded-lg">{item.icon}</div>
+              <p className="text-sm text-gray-500">{item.label}</p>
+            </div>
+            <h3 className="text-2xl font-semibold text-gray-800">
+              {item.value}
+            </h3>
           </div>
+        ))}
+      </section>
 
-          {/* Courses & Students */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <CourseList courses={coursesData || []} cardColor="climate-card" accentColor="climate-accent" />
-            <StudentList students={studentsData || []} cardColor="climate-card" accentColor="climate-accent" />
-          </div>
+      {/* 🧠 Recent Activity */}
+      <section>
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">
+          Recent Activity
+        </h2>
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-3">
+          {recentActivity.length > 0 ? (
+            recentActivity.map((item, idx) => (
+              <div
+                key={idx}
+                className="flex items-center justify-between text-gray-700"
+              >
+                <p>✅ {item.message}</p>
+                <span className="text-xs text-gray-500">{item.time}</span>
+              </div>
+            ))
+          ) : (
+            <p className="text-gray-500 text-sm">No recent activity yet.</p>
+          )}
+        </div>
+      </section>
 
-          {/* Assignments & Analytics */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <AssignmentPanel
-              assignments={assignmentsData || []}
-              cardColor="climate-card"
-              accentColor="climate-accent"
-              onUpdateStatus={async (id, status) => {
-                await fetch(`/api/assignments/${id}`, {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ status }),
-                })
-              }}
-            />
-            <AnalyticsChart data={analyticsData || []} title="Weekly Analytics" interactive />
-          </div>
-
-          {/* Announcements */}
-          <AnnouncementPanel
-            announcements={Array.isArray(announcementsData) ? announcementsData : []}
-            cardColor="climate-card"
-            accentColor="climate-accent"
-            onUpdateStatus={async (id, status) => {
-              await fetch(`/api/announcements/${id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status }),
-              })
-            }}
-            onDelete={async (id) => {
-              await fetch(`/api/announcements/${id}`, { method: 'DELETE' })
-            }}
-          />
-        </main>
-      </div>
-    </div>
+      {/* 🎯 Upcoming Tasks */}
+      <section>
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">
+          Upcoming Tasks
+        </h2>
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+          <ul className="list-disc list-inside text-gray-700 space-y-2">
+            <li>
+              Review lesson uploads for{' '}
+              <strong>Carbon Developer Essentials</strong>
+            </li>
+            <li>
+              Approve certificate requests for <strong>GHG MRV Course</strong>
+            </li>
+            <li>
+              Respond to student queries in{' '}
+              <strong>Climate Change Intro</strong>
+            </li>
+          </ul>
+        </div>
+      </section>
+    </main>
   )
 }
