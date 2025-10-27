@@ -1,0 +1,155 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
+import Link from 'next/link'
+import { ArrowLeft, PlusCircle, Loader2 } from 'lucide-react'
+import LessonCard from '../../components/LessonCard'
+import LessonEditor from '../../components/LessonEditor'
+import AddLessonModal from '../../components/AddLessonModal'
+import { apiRequest } from '@/lib/api'
+import type { Lesson } from '@/types/course' // ✅ unified Lesson type
+
+export default function ModulePage() {
+  const { slug, moduleId } = useParams()
+  const [lessons, setLessons] = useState<Lesson[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const [addModalOpen, setAddModalOpen] = useState(false)
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editingLesson, setEditingLesson] = useState<Lesson | null>(null)
+
+  // 🔄 Fetch lessons for this module
+  useEffect(() => {
+    async function fetchLessons() {
+      try {
+        const data = await apiRequest(`lessons?moduleId=${moduleId}`, 'GET')
+        setLessons(data)
+      } catch (err) {
+        console.error('Error fetching lessons:', err)
+        alert('Failed to load lessons.')
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchLessons()
+  }, [moduleId])
+
+  // ➕ Add new lesson
+  const handleAddLesson = async (data: Omit<Lesson, 'id'>) => {
+    try {
+      const created = await apiRequest('lessons', 'POST', { ...data, moduleId })
+      setLessons((prev) => [...prev, created])
+      setAddModalOpen(false)
+    } catch (err) {
+      console.error('Error adding lesson:', err)
+      alert('Failed to add lesson.')
+    }
+  }
+
+  // ✏️ Edit lesson
+  const handleEditLesson = (lesson: Lesson) => {
+    setEditingLesson(lesson)
+    setEditorOpen(true)
+  }
+
+  // 💾 Save edited lesson
+  const handleSaveLesson = async (updated: Lesson) => {
+    try {
+      const saved = await apiRequest(`lessons/${updated.id}`, 'PATCH', updated)
+      setLessons((prev) => prev.map((l) => (l.id === saved.id ? saved : l)))
+      setEditorOpen(false)
+    } catch (err) {
+      console.error('Error saving lesson:', err)
+      alert('Failed to save lesson.')
+    }
+  }
+
+  // 🗑️ Delete lesson
+  const handleDeleteLesson = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this lesson?')) return
+    try {
+      await apiRequest(`lessons/${id}`, 'DELETE')
+      setLessons((prev) => prev.filter((l) => l.id !== id))
+    } catch (err) {
+      console.error('Error deleting lesson:', err)
+      alert('Failed to delete lesson.')
+    }
+  }
+
+  if (loading) {
+    return (
+      <main className="min-h-screen flex justify-center items-center bg-gray-50">
+        <Loader2 size={24} className="animate-spin text-gray-600 mr-2" />
+        <span>Loading lessons...</span>
+      </main>
+    )
+  }
+
+  return (
+    <main className="min-h-screen bg-gray-50 p-6 space-y-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Link
+            href={`/staff/courses/${slug}`}
+            className="flex items-center text-gray-600 hover:text-green-700 transition"
+          >
+            <ArrowLeft size={18} className="mr-1" />
+            Back to Modules
+          </Link>
+          <h1 className="text-xl font-bold text-gray-900">
+            Module {moduleId} — Lesson Builder
+          </h1>
+        </div>
+
+        <button
+          onClick={() => setAddModalOpen(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+        >
+          <PlusCircle size={18} />
+          Add Lesson
+        </button>
+      </div>
+
+      {/* Lessons List */}
+      <section className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 space-y-4">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">
+          Lessons in this Module
+        </h2>
+
+        {lessons.length > 0 ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {lessons.map((lesson) => (
+              <LessonCard
+                key={lesson.id}
+                lesson={lesson}
+                onUpdated={handleEditLesson}  // ✅ matches LessonCard props
+                onDeleted={() => handleDeleteLesson(lesson.id)} // ✅ matches prop name
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-500 text-center py-6">
+            No lessons yet. Add one to begin building this module.
+          </p>
+        )}
+      </section>
+
+      {/* Modals */}
+      <AddLessonModal
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        onAdded={(lesson) => setLessons((prev) => [...prev, lesson])} // ✅ unified prop name
+        moduleId={String(moduleId)}
+      />
+
+      <LessonEditor
+        open={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        onSave={handleSaveLesson}
+        initialLesson={editingLesson}
+      />
+    </main>
+  )
+}
