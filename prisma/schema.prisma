@@ -114,9 +114,12 @@ model Module {
   id        String   @id @default(cuid()) @map("_id")
   title     String
   order     Int?
+    slug      String   @unique
   courseId  String
   course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
   lessons   Lesson[]
+   createdAt DateTime @default(now())      // 👈 add this
+  updatedAt DateTime @updatedAt           // 👈 add this
 
   @@index([courseId])
 }
@@ -124,6 +127,7 @@ model Module {
 model Lesson {
   id          String   @id @default(cuid()) @map("_id")
   title       String
+  slug      String   @unique
   description String?
   duration    String?
   videoUrl    String?
@@ -131,7 +135,8 @@ model Lesson {
   content     String?   // 🆕 Add this
   moduleId    String
   module      Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
-
+ createdAt DateTime @default(now())      // 👈 add this
+  updatedAt DateTime @updatedAt           // 👈 add this
   @@index([moduleId])
 }
 

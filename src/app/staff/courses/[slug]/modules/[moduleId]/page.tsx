@@ -8,32 +8,43 @@ import LessonCard from '../../components/LessonCard'
 import LessonEditor from '../../components/LessonEditor'
 import AddLessonModal from '../../components/AddLessonModal'
 import { apiRequest } from '@/lib/api'
-import type { Lesson } from '@/types/course' // ✅ unified Lesson type
+import type { Lesson } from '@/types/course'
 
 export default function ModulePage() {
   const { slug, moduleId } = useParams()
   const [lessons, setLessons] = useState<Lesson[]>([])
+  const [module, setModule] = useState<{ title: string } | null>(null)
+  const [course, setCourse] = useState<{ title: string } | null>(null)
   const [loading, setLoading] = useState(true)
 
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null)
 
-  // 🔄 Fetch lessons for this module
+  // 🔄 Fetch course + module + lessons
   useEffect(() => {
-    async function fetchLessons() {
+    async function fetchModuleAndLessons() {
       try {
-        const data = await apiRequest(`lessons?moduleId=${moduleId}`, 'GET')
-        setLessons(data)
+        // Fetch course details
+        const courseData = await apiRequest(`courses/${slug}`, 'GET')
+        setCourse(courseData)
+
+        // Fetch module details
+        const moduleData = await apiRequest(`modules/${moduleId}`, 'GET')
+        setModule(moduleData)
+
+        // Fetch lessons
+        const lessonData = await apiRequest(`lessons?moduleId=${moduleId}`, 'GET')
+        setLessons(lessonData)
       } catch (err) {
-        console.error('Error fetching lessons:', err)
-        alert('Failed to load lessons.')
+        console.error('Error fetching data:', err)
+        alert('Failed to load module or course details.')
       } finally {
         setLoading(false)
       }
     }
-    fetchLessons()
-  }, [moduleId])
+    fetchModuleAndLessons()
+  }, [slug, moduleId])
 
   // ➕ Add new lesson
   const handleAddLesson = async (data: Omit<Lesson, 'id'>) => {
@@ -87,10 +98,10 @@ export default function ModulePage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 p-6 space-y-8">
+    <main className="min-h-screen bg-gray-50 p-6 pt-[88px] sm:pt-[96px] space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
           <Link
             href={`/staff/courses/${slug}`}
             className="flex items-center text-gray-600 hover:text-green-700 transition"
@@ -98,9 +109,18 @@ export default function ModulePage() {
             <ArrowLeft size={18} className="mr-1" />
             Back to Modules
           </Link>
-          <h1 className="text-xl font-bold text-gray-900">
-            Module {moduleId} — Lesson Builder
-          </h1>
+
+          <div className="mt-2 sm:mt-0">
+            <p className="text-sm text-gray-500">
+              <span className="font-medium text-gray-700">
+                {course ? course.title : 'Course'}
+              </span>{' '}
+              →{' '}
+              <span className="font-medium text-green-700">
+                {module ? module.title : 'Module'}
+              </span>
+            </p>
+          </div>
         </div>
 
         <button
@@ -111,6 +131,11 @@ export default function ModulePage() {
           Add Lesson
         </button>
       </div>
+
+      {/* Page Title */}
+      <h1 className="text-2xl font-bold text-gray-900">
+        {module ? module.title : 'Loading...'} — Lesson Builder
+      </h1>
 
       {/* Lessons List */}
       <section className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 space-y-4">
@@ -124,8 +149,8 @@ export default function ModulePage() {
               <LessonCard
                 key={lesson.id}
                 lesson={lesson}
-                onUpdated={handleEditLesson}  // ✅ matches LessonCard props
-                onDeleted={() => handleDeleteLesson(lesson.id)} // ✅ matches prop name
+                onUpdated={handleEditLesson}
+                onDeleted={() => handleDeleteLesson(lesson.id)}
               />
             ))}
           </div>
@@ -140,7 +165,7 @@ export default function ModulePage() {
       <AddLessonModal
         open={addModalOpen}
         onClose={() => setAddModalOpen(false)}
-        onAdded={(lesson) => setLessons((prev) => [...prev, lesson])} // ✅ unified prop name
+        onAdded={(lesson) => setLessons((prev) => [...prev, lesson])}
         moduleId={String(moduleId)}
       />
 

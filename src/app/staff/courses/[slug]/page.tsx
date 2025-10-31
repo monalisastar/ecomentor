@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Save, ArrowLeft, Globe, Eye } from 'lucide-react'
+import { Save, ArrowLeft, Globe, Eye, Upload } from 'lucide-react'
 import Link from 'next/link'
 import ModuleManager from './components/ModuleManager'
 
@@ -27,12 +27,8 @@ export default function CourseEditorPage() {
         body: JSON.stringify({ slug, title, description }),
       })
       const data = await res.json()
-
-      if (data.success) {
-        alert('✅ Course saved successfully!')
-      } else {
-        alert('⚠️ Failed to save course.')
-      }
+      if (data.success) alert('✅ Course saved successfully!')
+      else alert('⚠️ Failed to save course.')
     } catch (error) {
       console.error(error)
       alert('❌ Error saving course.')
@@ -52,13 +48,10 @@ export default function CourseEditorPage() {
         body: JSON.stringify({ slug, title, description }),
       })
       const data = await res.json()
-
       if (data.success) {
         setPublished(true)
         alert('🎉 Course published successfully!')
-      } else {
-        alert('⚠️ Failed to publish course.')
-      }
+      } else alert('⚠️ Failed to publish course.')
     } catch (error) {
       console.error(error)
       alert('❌ Error publishing course.')
@@ -145,6 +138,43 @@ export default function CourseEditorPage() {
             />
           </div>
         </div>
+      </section>
+
+      {/* 🧩 Auto-Import Course */}
+      <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-3">
+        <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+          <Upload size={18} className="text-green-600" /> Auto-Import Course
+        </h2>
+        <p className="text-sm text-gray-600">
+          Upload a <b>.pptx</b>, <b>.pdf</b>, <b>.docx</b>, or <b>.zip</b> file
+          to automatically generate modules and lessons.
+        </p>
+
+        {/* 📦 Upload Form */}
+        <form
+          action={`/api/staff/courses/${slug}/import`}
+          method="post"
+          encType="multipart/form-data"
+          onSubmit={() =>
+            // 🔄 Trigger refresh event ~6 seconds after upload (adjust if needed)
+            setTimeout(() => window.dispatchEvent(new Event('imported')), 6000)
+          }
+          className="flex items-center gap-3 border p-3 rounded-md bg-gray-50"
+        >
+          <input
+            type="file"
+            name="file"
+            accept=".pptx,.pdf,.docx,.zip"
+            required
+            className="border p-2 rounded text-sm"
+          />
+          <button
+            type="submit"
+            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 flex items-center gap-2"
+          >
+            <Upload size={16} /> Import
+          </button>
+        </form>
       </section>
 
       {/* 📚 Modules */}

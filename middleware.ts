@@ -2,102 +2,75 @@ import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+// ✅ Run middleware for all pages EXCEPT login/auth/static
 export const config = {
-  matcher: ["/student/:path*", "/staff/:path*", "/admin/:path*"],
+  matcher: [
+    "/((?!api/auth|_next/static|_next/image|favicon.ico|login|register|forgot-password|unauthorized|api/health).*)",
+  ],
 };
-
-const specialEmails = [
-  "njatabrian648@gmail.com",
-  "virginia.njata@gmail.com",
-  "trizer.trio56@gmail.com",
-];
 
 export default withAuth(
   function middleware(req: NextRequest & { nextauth: { token: any } }) {
     const token = req.nextauth.token;
     const { pathname } = req.nextUrl;
 
+    // 🧩 Skip middleware for login/register/etc.
+    if (
+      pathname.startsWith("/login") ||
+      pathname.startsWith("/register") ||
+      pathname.startsWith("/forgot-password") ||
+      pathname.startsWith("/api/auth") ||
+      pathname.startsWith("/unauthorized")
+    ) {
+      return NextResponse.next();
+    }
+
     // 🚫 No token → redirect to login
     if (!token) {
       const loginUrl = new URL("/login", req.url);
       loginUrl.searchParams.set("callbackUrl", pathname);
-      console.warn(`🚫 No token found. Redirecting to login from ${pathname}`);
+      console.warn(`🚫 No token found → redirecting from ${pathname}`);
       return NextResponse.redirect(loginUrl);
     }
 
+    // ✅ Extract roles safely (handle array or single value)
     const email = token.email as string | undefined;
-    const tokenRole = token.role as string | undefined;
-    const cookieRole = req.cookies.get("eco_mentor_role")?.value;
-    const role = cookieRole || tokenRole || "student";
+    const userRoles = Array.isArray(token.roles)
+      ? token.roles
+      : token.role
+      ? [token.role]
+      : ["student"];
 
-    // ✅ SPECIAL USERS (dual access)
-    if (email && specialEmails.includes(email)) {
-      const isStudentArea = pathname.startsWith("/student");
-      const isStaffArea = pathname.startsWith("/staff");
-      const isAdminArea = pathname.startsWith("/admin");
+    console.log("🎫 Middleware check →", { email, roles: userRoles, pathname });
 
-      const preferredPath =
-        role === "student"
-          ? "/student/dashboard"
-          : role === "admin"
-          ? "/admin/dashboard"
-          : "/staff/dashboard";
-
-      // 🟢 Redirect only when visiting base section paths
-      const basePaths = ["/staff", "/staff/", "/student", "/student/", "/admin", "/admin/"];
-      if (basePaths.includes(pathname)) {
-        console.log(`🟢 Redirecting ${email} → ${preferredPath}`);
-        return NextResponse.redirect(new URL(preferredPath, req.url));
+    // ✅ Role-based access (multi-role aware)
+    if (pathname.startsWith("/student")) {
+      if (!userRoles.includes("student") && !userRoles.includes("admin")) {
+        console.warn(`🚫 Unauthorized roles '${userRoles}' for student route`);
+        return NextResponse.redirect(new URL("/unauthorized", req.url));
       }
-
-      // 🚀 Auto-correct if visiting wrong dashboard
-      if (pathname.endsWith("/student/dashboard") && role === "staff") {
-        console.log(`🔄 Auto-correcting staff from student dashboard → /staff/dashboard`);
-        return NextResponse.redirect(new URL("/staff/dashboard", req.url));
-      }
-      if (pathname.endsWith("/staff/dashboard") && role === "student") {
-        console.log(`🔄 Auto-correcting student from staff dashboard → /student/dashboard`);
-        return NextResponse.redirect(new URL("/student/dashboard", req.url));
-      }
-      if (pathname.endsWith("/admin/dashboard") && role !== "admin") {
-        console.log(`🔄 Auto-correcting non-admin from admin dashboard → ${preferredPath}`);
-        return NextResponse.redirect(new URL(preferredPath, req.url));
-      }
-
-      // 🧩 Stay in correct section
-      if (isStaffArea && role === "staff") return NextResponse.next();
-      if (isStudentArea && role === "student") return NextResponse.next();
-      if (isAdminArea && role === "admin") return NextResponse.next();
-
-      console.log(`✅ Staying in section: ${pathname} (${role})`);
-      return NextResponse.next();
     }
 
-    // 🚫 Role-based protection for non-special users
-    const loginUrl = new URL("/login", req.url);
-    loginUrl.searchParams.set("callbackUrl", pathname);
-
-    if (pathname.startsWith("/student") && role !== "student") {
-      console.warn(`🚫 ${email} (${role}) tried to access student area.`);
-      return NextResponse.redirect(loginUrl);
+    if (pathname.startsWith("/staff")) {
+      if (!userRoles.includes("staff") && !userRoles.includes("admin")) {
+        console.warn(`🚫 Unauthorized roles '${userRoles}' for staff route`);
+        return NextResponse.redirect(new URL("/unauthorized", req.url));
+      }
     }
 
-    if (pathname.startsWith("/staff") && !["staff", "admin"].includes(role)) {
-      console.warn(`🚫 ${email} (${role}) tried to access staff area.`);
-      return NextResponse.redirect(loginUrl);
+    if (pathname.startsWith("/admin")) {
+      if (!userRoles.includes("admin")) {
+        console.warn(`🚫 Unauthorized roles '${userRoles}' for admin route`);
+        return NextResponse.redirect(new URL("/unauthorized", req.url));
+      }
     }
 
-    if (pathname.startsWith("/admin") && role !== "admin") {
-      console.warn(`🚫 ${email} (${role}) tried to access admin area.`);
-      return NextResponse.redirect(loginUrl);
-    }
-
-    console.log(`✅ Authorized normal user: ${email} (${role}) → ${pathname}`);
+    console.log(`✅ Authorized: ${email} (${userRoles.join(", ")}) → ${pathname}`);
     return NextResponse.next();
   },
   {
     callbacks: {
-      authorized: ({ token }) => !!token,
+      authorized: ({ token }) => !!token, // ✅ must have valid session
     },
   }
 );

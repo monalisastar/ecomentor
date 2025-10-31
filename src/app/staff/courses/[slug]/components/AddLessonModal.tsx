@@ -3,13 +3,13 @@
 import { useState } from 'react'
 import { X, PlusCircle, Upload, Loader2 } from 'lucide-react'
 import { apiRequest } from '@/lib/api'
-import type { Lesson } from '@/types/course' // ✅ use shared type
+import type { Lesson } from '@/types/course'
 
 type AddLessonModalProps = {
   open: boolean
   moduleId: string
   onClose: () => void
-  onAdded: (lesson: Lesson) => void | Promise<void> // ✅ correct prop name + async support
+  onAdded: (lesson: Lesson) => void | Promise<void>
 }
 
 export default function AddLessonModal({
@@ -20,6 +20,7 @@ export default function AddLessonModal({
 }: AddLessonModalProps) {
   const [title, setTitle] = useState('')
   const [duration, setDuration] = useState('')
+  const [lessonContent, setLessonContent] = useState('')
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [documentFile, setDocumentFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
@@ -30,8 +31,6 @@ export default function AddLessonModal({
     e.preventDefault()
 
     if (!title.trim()) return alert('Please provide a lesson title.')
-    if (!videoFile) return alert('Please upload a video file.')
-    if (!documentFile) return alert('Please upload a supporting document.')
 
     try {
       setLoading(true)
@@ -41,20 +40,21 @@ export default function AddLessonModal({
       formData.append('title', title)
       formData.append('duration', duration || '—')
       formData.append('moduleId', moduleId)
-      formData.append('videoFile', videoFile)
-      formData.append('documentFile', documentFile)
+      if (lessonContent) formData.append('content', lessonContent)
+      if (videoFile) formData.append('videoFile', videoFile)
+      if (documentFile) formData.append('documentFile', documentFile)
 
       // 🚀 Send to backend
       const newLesson: Lesson = await apiRequest('lessons', 'POST', formData, true)
-
-      await onAdded(newLesson) // ✅ supports async parent handlers
-      onClose()
+      await onAdded(newLesson)
 
       // Reset form
       setTitle('')
       setDuration('')
+      setLessonContent('')
       setVideoFile(null)
       setDocumentFile(null)
+      onClose()
     } catch (err) {
       console.error('Error adding lesson:', err)
       alert('Failed to add lesson. Please try again.')
@@ -119,10 +119,27 @@ export default function AddLessonModal({
             />
           </div>
 
+          {/* Lesson Content */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Lesson Content <span className="text-gray-400 text-xs">(optional)</span>
+            </label>
+            <textarea
+              value={lessonContent}
+              onChange={(e) => setLessonContent(e.target.value)}
+              placeholder="Write or paste the lesson content here..."
+              rows={6}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:outline-none resize-none"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              You can include text-based lesson material here — uploads are optional.
+            </p>
+          </div>
+
           {/* Video Upload */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Upload Video <span className="text-red-500">*</span>
+              Upload Video <span className="text-gray-400 text-xs">(optional)</span>
             </label>
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-200 transition">
@@ -141,7 +158,7 @@ export default function AddLessonModal({
           {/* PDF or PPT Upload */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Upload PDF or PPT <span className="text-red-500">*</span>
+              Upload PDF or PPT <span className="text-gray-400 text-xs">(optional)</span>
             </label>
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-200 transition">

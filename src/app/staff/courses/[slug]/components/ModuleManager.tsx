@@ -10,40 +10,56 @@ import {
   ChevronUp,
   Edit,
   Loader2,
+  RefreshCcw,
 } from 'lucide-react'
 import LessonEditor from './LessonEditor'
 import ModuleModal from './ModuleModal'
 import { apiRequest } from '@/lib/api'
-import type { Lesson, Module } from '@/types/course' // ✅ unified typing
+import type { Lesson, Module } from '@/types/course'
 
 export default function ModuleManager() {
   const { slug } = useParams()
   const [modules, setModules] = useState<Module[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedModule, setExpandedModule] = useState<string | null>(null)
-
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null)
   const [targetModuleId, setTargetModuleId] = useState<string | null>(null)
-
   const [modalOpen, setModalOpen] = useState(false)
   const [editingModule, setEditingModule] = useState<Module | null>(null)
+  const [toast, setToast] = useState<string | null>(null) // ✅ for success message
 
   // 🔄 Fetch modules + lessons
-  useEffect(() => {
-    async function fetchModules() {
-      try {
-        const data = await apiRequest(`modules?courseId=${slug}`, 'GET')
-        setModules(data)
-      } catch (err) {
-        console.error('Error fetching modules:', err)
-        alert('Failed to load modules.')
-      } finally {
-        setLoading(false)
+  async function fetchModules(showToast = false) {
+    try {
+      const data = await apiRequest(`modules?courseId=${slug}`, 'GET')
+      setModules(data)
+      if (showToast) {
+        setToast('✅ Modules imported successfully!')
+        setTimeout(() => setToast(null), 4000)
       }
+    } catch (err) {
+      console.error('Error fetching modules:', err)
+      alert('Failed to load modules.')
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     fetchModules()
   }, [slug])
+
+  // 🧠 Listen for “imported” event from upload form
+  useEffect(() => {
+    const handleImported = () => {
+      console.log('📦 Import event detected → refreshing modules...')
+      fetchModules(true)
+    }
+
+    window.addEventListener('imported', handleImported)
+    return () => window.removeEventListener('imported', handleImported)
+  }, [])
 
   // 💾 Add or Edit Module
   const handleSaveModule = async (data: { title: string; description?: string }) => {
@@ -156,27 +172,42 @@ export default function ModuleManager() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {/* ✅ Toast Notification */}
+      {toast && (
+        <div className="fixed top-24 right-6 bg-green-600 text-white px-4 py-2 rounded-lg shadow-md text-sm animate-fadeIn">
+          {toast}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-gray-900">Course Modules 📚</h2>
-        <button
-          onClick={() => {
-            setEditingModule(null)
-            setModalOpen(true)
-          }}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-        >
-          <PlusCircle size={18} />
-          Add Module
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => fetchModules()}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition"
+          >
+            <RefreshCcw size={16} /> Refresh
+          </button>
+          <button
+            onClick={() => {
+              setEditingModule(null)
+              setModalOpen(true)
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+          >
+            <PlusCircle size={18} />
+            Add Module
+          </button>
+        </div>
       </div>
 
       {/* Modules List */}
       <div className="space-y-4">
         {modules.length === 0 && (
           <p className="text-center text-gray-500 py-8">
-            No modules yet. Click “Add Module” to start building your course.
+            No modules yet. Click “Add Module” or use Auto-Import to start.
           </p>
         )}
 
