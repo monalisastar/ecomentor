@@ -32,7 +32,6 @@ export async function POST(req: NextRequest) {
 
     // 📦 Extract request body
     const { courseId, title, order } = await req.json()
-
     if (!courseId || !title) {
       return NextResponse.json(
         { error: "Missing required fields: courseId or title" },
@@ -50,11 +49,11 @@ export async function POST(req: NextRequest) {
     const moduleCount = await prisma.module.count({ where: { courseId } })
     const newOrder = order ?? moduleCount + 1
 
-    // 🏗️ Create module with slug
+    // 🏗️ Create module with unique slug
     const newModule = await prisma.module.create({
       data: {
         title,
-        slug: nanoid(10), // 👈 ensure unique slug
+        slug: nanoid(10),
         order: newOrder,
         courseId,
       },
@@ -68,7 +67,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    return NextResponse.json(newModule, { status: 201 })
+    return NextResponse.json({ module: newModule }, { status: 201 })
   } catch (error) {
     console.error("POST /modules error:", error)
     return NextResponse.json(
@@ -79,29 +78,46 @@ export async function POST(req: NextRequest) {
 }
 
 //
-// ✅ GET /api/modules?courseId=xyz
-// Fetch all modules for a given course
+// ✅ GET /api/modules?courseId=xyz OR ?courseSlug=my-course
+// Fetch all modules for a given course (with lessons)
 //
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     const courseId = searchParams.get("courseId")
+    const courseSlug = searchParams.get("courseSlug")
 
-    if (!courseId) {
-      return NextResponse.json({ error: "Missing courseId" }, { status: 400 })
+    // 🧩 Resolve course ID if slug provided
+    let resolvedCourseId = courseId
+    if (!resolvedCourseId && courseSlug) {
+      const course = await prisma.course.findUnique({
+        where: { slug: courseSlug },
+        select: { id: true },
+      })
+      if (!course) {
+        return NextResponse.json({ error: "Course not found" }, { status: 404 })
+      }
+      resolvedCourseId = course.id
     }
 
+    if (!resolvedCourseId) {
+      return NextResponse.json(
+        { error: "Missing courseId or courseSlug" },
+        { status: 400 }
+      )
+    }
+
+    // 📚 Fetch modules (with lessons)
     const modules = await prisma.module.findMany({
-      where: { courseId },
+      where: { courseId: resolvedCourseId },
       include: {
-        lessons: {
-          orderBy: { order: "asc" }, // 👈 use order field, not title
-        },
+        lessons: { orderBy: { order: "asc" } },
       },
       orderBy: { order: "asc" },
     })
 
-    return NextResponse.json(modules, { status: 200 })
+    // ✅ Return consistent structure
+    return NextResponse.json({ modules }, { status: 200 })
   } catch (error) {
     console.error("GET /modules error:", error)
     return NextResponse.json(

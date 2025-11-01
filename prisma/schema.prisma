@@ -99,7 +99,10 @@ model Course {
   image          String?
   category       String?     // e.g. "Climate", "AI", "Web3"
   createdBy      String?     // user email or id of lecturer/admin
-  unlockWithAERA Int?
+ priceUSD      Float?   // 💰 New field for course pricing in USD
+ published  Boolean   @default(false)
+
+
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 

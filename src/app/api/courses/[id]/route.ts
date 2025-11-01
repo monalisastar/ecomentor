@@ -3,10 +3,16 @@ import prisma from "@/lib/prisma"
 import { getToken } from "next-auth/jwt"
 import type { NextRequest } from "next/server"
 
-// ✅ GET /api/courses/[id] → Fetch one course (with modules & lessons)
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+/**
+ * 📘 GET /api/courses/[id]
+ * Fetch one course with its modules, lessons, enrollments & payments.
+ */
+export async function GET(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
   try {
-    const { id } = params
+    const { id } = await context.params
 
     const course = await prisma.course.findUnique({
       where: { id },
@@ -33,14 +39,19 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-// ✅ PATCH /api/courses/[id] → Update course details (Lecturer/Admin)
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+/**
+ * ✏️ PATCH /api/courses/[id]
+ * Update course details (Lecturer/Admin)
+ */
+export async function PATCH(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
   try {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
     if (!token?.email)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    // 🔎 Fetch user and roles
     const user = await prisma.user.findUnique({
       where: { email: token.email },
       select: { roles: true },
@@ -48,23 +59,23 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!user)
       return NextResponse.json({ error: "User not found" }, { status: 404 })
 
-    // 🔒 Restrict to lecturers or admins
     if (!["lecturer", "admin"].some((r) => user.roles.includes(r))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const { id } = params
+    const { id } = await context.params
     const body = await req.json()
 
-    // 🧩 Only update provided fields
     const data: any = {}
     if (body.title) data.title = body.title
     if (body.description) data.description = body.description
     if (body.image) data.image = body.image
     if (body.category) data.category = body.category
-    if (body.unlockWithAERA !== undefined) data.unlockWithAERA = body.unlockWithAERA
+    if (body.priceUSD !== undefined) data.priceUSD = body.priceUSD
+    if (body.unlockWithAERA !== undefined)
+      data.unlockWithAERA = body.unlockWithAERA
 
-    // Auto-generate slug if title changed
+    // Auto-regenerate slug if title changed
     if (body.title) {
       data.slug = body.title
         .toLowerCase()
@@ -90,14 +101,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-// ✅ DELETE /api/courses/[id] → Delete course (Admin only)
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+/**
+ * 🗑️ DELETE /api/courses/[id]
+ * Delete course (Admin only)
+ */
+export async function DELETE(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
   try {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
     if (!token?.email)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    // 🔎 Verify user is admin
     const user = await prisma.user.findUnique({
       where: { email: token.email },
       select: { roles: true },
@@ -108,21 +124,26 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     if (!user.roles.includes("admin"))
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    const { id } = params
+    const { id } = await context.params
 
-    // 🧹 Cascade delete (modules, lessons, enrollments, payments)
+    // 🧹 Cascade delete safely (avoid P2025)
     await prisma.lesson.deleteMany({ where: { module: { courseId: id } } })
     await prisma.module.deleteMany({ where: { courseId: id } })
     await prisma.enrollment.deleteMany({ where: { courseId: id } })
     await prisma.payment.deleteMany({ where: { courseId: id } })
-    await prisma.course.delete({ where: { id } })
 
-    console.log(`🗑️ Course deleted: ${id}`)
-    return NextResponse.json({ message: "Course deleted successfully" }, { status: 200 })
-  } catch (error) {
+    // ✅ Use deleteMany (not delete) to prevent “record not found” errors
+    await prisma.course.deleteMany({ where: { id } })
+
+    console.log(`🗑️ Course deleted successfully: ${id}`)
+    return NextResponse.json(
+      { message: "Course deleted successfully" },
+      { status: 200 }
+    )
+  } catch (error: any) {
     console.error("❌ Error deleting course:", error)
     return NextResponse.json(
-      { error: "Failed to delete course" },
+      { error: "Failed to delete course", details: error.message },
       { status: 500 }
     )
   }

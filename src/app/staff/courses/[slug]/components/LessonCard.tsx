@@ -7,54 +7,48 @@ import {
   Edit,
   Trash2,
   ExternalLink,
+  ChevronDown,
+  ChevronUp,
   X,
   Loader2,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { apiRequest } from '@/lib/api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Lesson } from '@/types/course'
 
-// 🎥 Helper: Custom Markdown Renderer with YouTube & Vimeo Embeds
+// 🎥 Markdown Renderer with YouTube & Vimeo Embeds
 const MarkdownWithEmbeds = ({ content }: { content: string }) => {
   const transformLinks = (url: string) => {
-    // YouTube patterns
-    const youtubeMatch = url.match(
-      /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/
-    )
-    if (youtubeMatch) {
-      const videoId = youtubeMatch[1]
+    const youtube = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/)
+    if (youtube) {
       return (
-        <div className="my-4 aspect-video">
+        <div className="my-3 aspect-video">
           <iframe
-            src={`https://www.youtube.com/embed/${videoId}`}
+            src={`https://www.youtube.com/embed/${youtube[1]}`}
             title="YouTube video"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
             className="w-full h-full rounded-lg border border-gray-200"
-          ></iframe>
+          />
         </div>
       )
     }
 
-    // Vimeo pattern
-    const vimeoMatch = url.match(/(?:https?:\/\/)?(?:www\.)?vimeo\.com\/(\d+)/)
-    if (vimeoMatch) {
-      const videoId = vimeoMatch[1]
+    const vimeo = url.match(/vimeo\.com\/(\d+)/)
+    if (vimeo) {
       return (
-        <div className="my-4 aspect-video">
+        <div className="my-3 aspect-video">
           <iframe
-            src={`https://player.vimeo.com/video/${videoId}`}
+            src={`https://player.vimeo.com/video/${vimeo[1]}`}
             title="Vimeo video"
-            allow="autoplay; fullscreen; picture-in-picture"
             allowFullScreen
             className="w-full h-full rounded-lg border border-gray-200"
-          ></iframe>
+          />
         </div>
       )
     }
 
-    // Default link rendering
     return (
       <a
         href={url}
@@ -86,6 +80,7 @@ type LessonCardProps = {
 }
 
 export default function LessonCard({ lesson, onUpdated, onDeleted }: LessonCardProps) {
+  const [expanded, setExpanded] = useState(false)
   const [isViewerOpen, setIsViewerOpen] = useState(false)
   const [viewType, setViewType] = useState<'video' | 'document' | null>(null)
   const [loading, setLoading] = useState(false)
@@ -94,7 +89,6 @@ export default function LessonCard({ lesson, onUpdated, onDeleted }: LessonCardP
     setViewType(type)
     setIsViewerOpen(true)
   }
-
   const closeViewer = () => {
     setViewType(null)
     setIsViewerOpen(false)
@@ -106,9 +100,10 @@ export default function LessonCard({ lesson, onUpdated, onDeleted }: LessonCardP
       setLoading(true)
       await apiRequest(`lessons/${lesson.id}`, 'DELETE')
       await onDeleted?.(lesson.id)
+      toast.success('🗑️ Lesson deleted.')
     } catch (err) {
       console.error('Error deleting lesson:', err)
-      alert('Failed to delete lesson. Please try again.')
+      toast.error('Failed to delete lesson.')
     } finally {
       setLoading(false)
     }
@@ -116,23 +111,23 @@ export default function LessonCard({ lesson, onUpdated, onDeleted }: LessonCardP
 
   return (
     <>
-      {/* Lesson Card */}
-      <div className="flex flex-col bg-gray-50 border border-gray-200 rounded-lg p-5 hover:bg-gray-100 transition relative space-y-4">
+      <div className="relative border border-gray-200 bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition group">
         {loading && (
           <div className="absolute inset-0 bg-white/70 flex items-center justify-center rounded-lg">
             <Loader2 className="animate-spin text-green-600" size={20} />
           </div>
         )}
 
-        {/* Header Section */}
-        <div className="flex justify-between items-start">
+        {/* Header */}
+        <div className="flex justify-between items-start gap-2">
           <div className="flex items-start gap-3">
             <div className="bg-green-100 text-green-700 rounded-full p-2 flex-shrink-0">
               <PlayCircle size={18} />
             </div>
-
             <div>
-              <h3 className="font-semibold text-gray-900">{lesson.title}</h3>
+              <h3 className="font-semibold text-gray-900 leading-tight">
+                {lesson.title}
+              </h3>
               {lesson.duration && (
                 <p className="text-xs text-gray-500 mt-0.5">
                   Duration: {lesson.duration}
@@ -142,7 +137,7 @@ export default function LessonCard({ lesson, onUpdated, onDeleted }: LessonCardP
           </div>
 
           {/* Actions */}
-          <div className="flex gap-3">
+          <div className="flex gap-2 items-center">
             {(lesson.videoUrl || lesson.documentUrl) && (
               <button
                 onClick={() =>
@@ -159,34 +154,43 @@ export default function LessonCard({ lesson, onUpdated, onDeleted }: LessonCardP
               <button
                 onClick={() => onUpdated(lesson)}
                 className="text-blue-600 hover:text-blue-800 transition"
-                title="Edit lesson"
+                title="Edit"
               >
-                <Edit size={16} />
+                <Edit size={15} />
               </button>
             )}
-
             {onDeleted && (
               <button
                 onClick={handleDelete}
                 className="text-red-600 hover:text-red-800 transition"
-                title="Delete lesson"
+                title="Delete"
               >
-                <Trash2 size={16} />
+                <Trash2 size={15} />
+              </button>
+            )}
+
+            {lesson.content && (
+              <button
+                onClick={() => setExpanded(!expanded)}
+                className="text-gray-600 hover:text-gray-900 transition"
+                title="Toggle content"
+              >
+                {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               </button>
             )}
           </div>
         </div>
 
-        {/* Lesson Content — Markdown + YouTube/Vimeo Embed */}
-        {lesson.content && (
-          <div className="bg-white border border-gray-200 rounded-md p-4 text-sm text-gray-700 leading-relaxed prose prose-green max-w-none">
+        {/* Inline Content Preview */}
+        {expanded && lesson.content && (
+          <div className="mt-3 bg-white border border-gray-200 rounded-md p-4 text-sm text-gray-700 leading-relaxed prose prose-green max-w-none animate-fadeIn">
             <MarkdownWithEmbeds content={lesson.content} />
           </div>
         )}
 
         {/* Attachments */}
         {(lesson.videoUrl || lesson.documentUrl) && (
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap mt-3">
             {lesson.videoUrl && (
               <button
                 onClick={() => openViewer('video')}
@@ -196,7 +200,6 @@ export default function LessonCard({ lesson, onUpdated, onDeleted }: LessonCardP
                 Watch Video
               </button>
             )}
-
             {lesson.documentUrl && (
               <button
                 onClick={() => openViewer('document')}
@@ -231,7 +234,6 @@ export default function LessonCard({ lesson, onUpdated, onDeleted }: LessonCardP
                 </p>
               )}
 
-              {/* Video Viewer */}
               {viewType === 'video' && lesson.videoUrl && (
                 <video
                   src={lesson.videoUrl}
@@ -240,7 +242,6 @@ export default function LessonCard({ lesson, onUpdated, onDeleted }: LessonCardP
                 />
               )}
 
-              {/* Document Viewer */}
               {viewType === 'document' && lesson.documentUrl && (
                 <iframe
                   src={lesson.documentUrl}

@@ -54,7 +54,12 @@ export default function CoursePreviewPage() {
     async function fetchCourse() {
       try {
         setLoading(true)
-        const course = await apiRequest(`/courses/slug/${slug}`, 'GET')
+        const id =
+          typeof window !== 'undefined'
+            ? new URLSearchParams(window.location.search).get('id') || slug
+            : slug
+
+        const course = await apiRequest(`/courses/${id}`, 'GET')
         if (!course) throw new Error('Course not found.')
         setModules(course.modules || [])
       } catch (err: any) {
@@ -73,12 +78,18 @@ export default function CoursePreviewPage() {
       ...module,
       lessons: module.lessons.filter((lesson) => {
         const fileType =
-          lesson.videoUrl ? 'video' :
-          lesson.documentUrl ? 'pdf' :
-          lesson.resourceUrl ? 'resource' : 'resource'
+          lesson.videoUrl
+            ? 'video'
+            : lesson.documentUrl
+            ? 'pdf'
+            : lesson.resourceUrl
+            ? 'resource'
+            : 'resource'
 
         const matchesType = filterType === 'all' || fileType === filterType
-        const matchesSearch = lesson.title.toLowerCase().includes(searchTerm.toLowerCase())
+        const matchesSearch = lesson.title
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase())
         return matchesType && matchesSearch
       }),
     }))
@@ -188,9 +199,13 @@ export default function CoursePreviewPage() {
                 {module.lessons.length > 0 ? (
                   module.lessons.map((lesson) => {
                     const fileType =
-                      lesson.videoUrl ? 'video' :
-                      lesson.documentUrl ? 'pdf' :
-                      lesson.resourceUrl ? 'resource' : 'resource'
+                      lesson.videoUrl
+                        ? 'video'
+                        : lesson.documentUrl
+                        ? 'pdf'
+                        : lesson.resourceUrl
+                        ? 'resource'
+                        : 'resource'
 
                     const icon =
                       fileType === 'pdf' ? (

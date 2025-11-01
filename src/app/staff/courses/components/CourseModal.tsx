@@ -1,15 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { X, Save, Loader2 } from 'lucide-react'
+import { useState, useEffect, ChangeEvent } from 'react'
+import { X, Save, Loader2, ImagePlus } from 'lucide-react'
 import { apiRequest } from '@/lib/api'
 
 type CourseFormData = {
   id?: string
   title: string
-  slug: string
   description: string
-  unlockWithAERA?: number
+  priceUSD?: number
+  image?: string
 }
 
 type CourseModalProps = {
@@ -27,62 +27,97 @@ export default function CourseModal({
 }: CourseModalProps) {
   const [formData, setFormData] = useState<CourseFormData>({
     title: '',
-    slug: '',
     description: '',
-    unlockWithAERA: undefined,
+    priceUSD: undefined,
+    image: '',
   })
+  const [preview, setPreview] = useState<string | null>(null)
+  const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
 
-  // ✨ If editing, prefill data
+  // ✨ Prefill if editing
   useEffect(() => {
     if (initialData) {
       setFormData(initialData)
+      setPreview(initialData.image || null)
     } else {
       setFormData({
         title: '',
-        slug: '',
         description: '',
-        unlockWithAERA: undefined,
+        priceUSD: undefined,
+        image: '',
       })
+      setPreview(null)
     }
   }, [initialData])
 
-  // 🧩 Handle input change
+  // 🧩 Handle text changes
   const handleChange = (field: keyof CourseFormData, value: string | number) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
-  // 💾 Save handler (POST or PATCH)
+  // 🖼 Handle image selection
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setFile(file)
+      setPreview(URL.createObjectURL(file))
+    }
+  }
+
+  // 💾 Save Course
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.title) {
-      alert('Please fill in the course title.')
+      alert('Please enter a course title.')
       return
     }
 
     try {
       setLoading(true)
 
-      // Auto-generate slug if missing
-      const slug =
-        formData.slug ||
-        formData.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+      // 🧠 Auto slugify
+      const slug = formData.title
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '')
 
-      const payload = { ...formData, slug }
+      let imageUrl = formData.image
+
+      // 📤 Upload image
+      if (file) {
+        const uploadForm = new FormData()
+        uploadForm.append('file', file)
+
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          body: uploadForm,
+        })
+
+        if (!uploadRes.ok) throw new Error('Image upload failed')
+        const { url } = await uploadRes.json()
+        imageUrl = url
+      }
+
+      const payload = {
+        title: formData.title,
+        slug,
+        description: formData.description,
+        priceUSD: formData.priceUSD ?? 0,
+        image: imageUrl,
+      }
 
       let saved
       if (initialData?.id) {
-        // 📝 Update course
         saved = await apiRequest(`courses/${initialData.id}`, 'PATCH', payload)
       } else {
-        // ➕ Create new course
         saved = await apiRequest('courses', 'POST', payload)
       }
 
       onSave(saved)
       onClose()
     } catch (err) {
-      console.error('Error saving course:', err)
+      console.error('❌ Error saving course:', err)
       alert('Failed to save course. Please try again.')
     } finally {
       setLoading(false)
@@ -123,25 +158,6 @@ export default function CourseModal({
             />
           </div>
 
-          {/* Slug */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Course Slug (URL-friendly)
-            </label>
-            <input
-              type="text"
-              value={formData.slug}
-              onChange={(e) =>
-                handleChange(
-                  'slug',
-                  e.target.value.toLowerCase().replace(/\s+/g, '-')
-                )
-              }
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 outline-none"
-              placeholder="e.g. ghg-accounting"
-            />
-          </div>
-
           {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -156,20 +172,48 @@ export default function CourseModal({
             />
           </div>
 
-          {/* AERA unlock price */}
+          {/* Price (USD) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Unlock with AERA (optional)
+              Price (USD)
             </label>
             <input
               type="number"
-              value={formData.unlockWithAERA ?? ''}
+              value={formData.priceUSD ?? ''}
               onChange={(e) =>
-                handleChange('unlockWithAERA', Number(e.target.value))
+                handleChange('priceUSD', Number(e.target.value))
               }
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 outline-none"
-              placeholder="e.g. 50"
+              placeholder="e.g. 49.99"
+              step="0.01"
+              min="0"
             />
+          </div>
+
+          {/* Image Upload */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Course Image
+            </label>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer bg-green-50 border border-green-300 text-green-700 px-3 py-2 rounded-lg hover:bg-green-100 transition">
+                <ImagePlus size={18} />
+                Upload Image
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+              </label>
+              {preview && (
+                <img
+                  src={preview}
+                  alt="Preview"
+                  className="w-16 h-16 object-cover rounded-lg border border-gray-300"
+                />
+              )}
+            </div>
           </div>
 
           {/* Actions */}

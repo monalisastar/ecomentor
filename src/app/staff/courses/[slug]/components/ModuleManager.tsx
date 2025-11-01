@@ -10,11 +10,13 @@ import {
   ChevronUp,
   Edit,
   Loader2,
-  RefreshCcw,
+  RefreshCw,
+  Eye,
 } from 'lucide-react'
 import LessonEditor from './LessonEditor'
 import ModuleModal from './ModuleModal'
-import { apiRequest } from '@/lib/api'
+import { toast } from 'sonner'
+import ReactMarkdown from 'react-markdown'
 import type { Lesson, Module } from '@/types/course'
 
 export default function ModuleManager() {
@@ -27,20 +29,18 @@ export default function ModuleManager() {
   const [targetModuleId, setTargetModuleId] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingModule, setEditingModule] = useState<Module | null>(null)
-  const [toast, setToast] = useState<string | null>(null) // ✅ for success message
 
-  // 🔄 Fetch modules + lessons
+  // 🔁 Fetch modules & lessons
   async function fetchModules(showToast = false) {
     try {
-      const data = await apiRequest(`modules?courseId=${slug}`, 'GET')
-      setModules(data)
-      if (showToast) {
-        setToast('✅ Modules imported successfully!')
-        setTimeout(() => setToast(null), 4000)
-      }
+      setLoading(true)
+      const res = await fetch(`/api/modules?courseSlug=${slug}`)
+      const data = await res.json()
+      setModules(data || [])
+      if (showToast) toast.success('✅ Modules imported successfully!')
     } catch (err) {
       console.error('Error fetching modules:', err)
-      alert('Failed to load modules.')
+      toast.error('Failed to load modules.')
     } finally {
       setLoading(false)
     }
@@ -50,105 +50,115 @@ export default function ModuleManager() {
     fetchModules()
   }, [slug])
 
-  // 🧠 Listen for “imported” event from upload form
+  // 🧠 Listen for “imported” event from CourseEditor
   useEffect(() => {
     const handleImported = () => {
       console.log('📦 Import event detected → refreshing modules...')
       fetchModules(true)
     }
-
     window.addEventListener('imported', handleImported)
     return () => window.removeEventListener('imported', handleImported)
   }, [])
 
-  // 💾 Add or Edit Module
+  // 💾 Save (create/update) module
   const handleSaveModule = async (data: { title: string; description?: string }) => {
     try {
       if (editingModule) {
-        const updated = await apiRequest(`modules/${editingModule.id}`, 'PATCH', data)
+        const res = await fetch(`/api/modules/${editingModule.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        })
+        const updated = await res.json()
         setModules((prev) =>
           prev.map((m) => (m.id === editingModule.id ? { ...m, ...updated } : m))
         )
+        toast.success('✅ Module updated!')
       } else {
-        const created = await apiRequest('modules', 'POST', {
-          title: data.title,
-          description: data.description,
-          courseId: slug,
+        const res = await fetch(`/api/modules`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...data, courseSlug: slug }),
         })
+        const created = await res.json()
         setModules((prev) => [...prev, created])
+        toast.success('📘 Module added!')
       }
     } catch (err) {
       console.error('Error saving module:', err)
-      alert('Could not save module.')
+      toast.error('Could not save module.')
     }
   }
 
-  // 🗑️ Delete Module
+  // 🗑️ Delete module
   const deleteModule = async (id: string) => {
     if (!confirm('Are you sure you want to delete this module?')) return
     try {
-      await apiRequest(`modules/${id}`, 'DELETE')
+      await fetch(`/api/modules/${id}`, { method: 'DELETE' })
       setModules((prev) => prev.filter((m) => m.id !== id))
+      toast.success('🗑️ Module deleted.')
     } catch (err) {
       console.error('Error deleting module:', err)
-      alert('Failed to delete module.')
+      toast.error('Failed to delete module.')
     }
   }
 
-  // ➕ Add Lesson
+  // ➕ Add lesson
   const addLesson = (moduleId: string) => {
     setTargetModuleId(moduleId)
     setEditingLesson(null)
     setEditorOpen(true)
   }
 
-  // ✏️ Edit Lesson
+  // ✏️ Edit lesson
   const editLesson = (moduleId: string, lesson: Lesson) => {
     setTargetModuleId(moduleId)
     setEditingLesson(lesson)
     setEditorOpen(true)
   }
 
-  // 💾 Save Lesson (Add or Edit)
+  // 💾 Save lesson
   const saveLesson = async (lesson: Lesson): Promise<void> => {
     if (!targetModuleId) return
     try {
-      if (editingLesson) {
-        const updated = await apiRequest(`lessons/${lesson.id}`, 'PATCH', lesson)
-        setModules((prev) =>
-          prev.map((m) =>
-            m.id === targetModuleId
-              ? {
-                  ...m,
-                  lessons: m.lessons.map((l) => (l.id === updated.id ? updated : l)),
-                }
-              : m
-          )
+      const isEdit = !!editingLesson
+      const url = isEdit
+        ? `/api/lessons/${lesson.id}`
+        : `/api/lessons?moduleId=${targetModuleId}`
+      const method = isEdit ? 'PATCH' : 'POST'
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(lesson),
+      })
+      const saved = await res.json()
+
+      setModules((prev) =>
+        prev.map((m) =>
+          m.id === targetModuleId
+            ? {
+                ...m,
+                lessons: isEdit
+                  ? m.lessons.map((l) => (l.id === saved.id ? saved : l))
+                  : [...m.lessons, saved],
+              }
+            : m
         )
-      } else {
-        const created = await apiRequest('lessons', 'POST', {
-          ...lesson,
-          moduleId: targetModuleId,
-        })
-        setModules((prev) =>
-          prev.map((m) =>
-            m.id === targetModuleId
-              ? { ...m, lessons: [...m.lessons, created] }
-              : m
-          )
-        )
-      }
+      )
+
+      toast.success(isEdit ? '✅ Lesson updated!' : '📝 Lesson added!')
     } catch (err) {
       console.error('Error saving lesson:', err)
-      alert('Could not save lesson.')
+      toast.error('Could not save lesson.')
     }
   }
 
-  // 🗑️ Delete Lesson
+  // 🗑️ Delete lesson
   const deleteLesson = async (moduleId: string, lessonId: string) => {
     if (!confirm('Delete this lesson?')) return
     try {
-      await apiRequest(`lessons/${lessonId}`, 'DELETE')
+      await fetch(`/api/lessons/${lessonId}`, { method: 'DELETE' })
       setModules((prev) =>
         prev.map((m) =>
           m.id === moduleId
@@ -156,15 +166,16 @@ export default function ModuleManager() {
             : m
         )
       )
+      toast.success('🗑️ Lesson deleted.')
     } catch (err) {
       console.error('Error deleting lesson:', err)
-      alert('Failed to delete lesson.')
+      toast.error('Failed to delete lesson.')
     }
   }
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-20 text-gray-500">
+      <div className="flex justify-center items-center py-16 text-gray-500">
         <Loader2 size={24} className="animate-spin mr-2" />
         Loading modules...
       </div>
@@ -172,23 +183,16 @@ export default function ModuleManager() {
   }
 
   return (
-    <div className="space-y-6 relative">
-      {/* ✅ Toast Notification */}
-      {toast && (
-        <div className="fixed top-24 right-6 bg-green-600 text-white px-4 py-2 rounded-lg shadow-md text-sm animate-fadeIn">
-          {toast}
-        </div>
-      )}
-
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-gray-900">Course Modules 📚</h2>
+        <h2 className="text-xl font-semibold text-gray-900">📚 Course Modules</h2>
         <div className="flex gap-2">
           <button
             onClick={() => fetchModules()}
             className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition"
           >
-            <RefreshCcw size={16} /> Refresh
+            <RefreshCw size={16} /> Refresh
           </button>
           <button
             onClick={() => {
@@ -203,20 +207,18 @@ export default function ModuleManager() {
         </div>
       </div>
 
-      {/* Modules List */}
-      <div className="space-y-4">
-        {modules.length === 0 && (
-          <p className="text-center text-gray-500 py-8">
-            No modules yet. Click “Add Module” or use Auto-Import to start.
-          </p>
-        )}
-
-        {modules.map((module) => (
+      {/* Modules */}
+      {modules.length === 0 ? (
+        <p className="text-gray-500 text-center py-8">
+          No modules yet. Use Auto-Import or Add Module.
+        </p>
+      ) : (
+        modules.map((module) => (
           <div
             key={module.id}
-            className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden"
+            className="border border-gray-200 rounded-lg bg-white shadow-sm overflow-hidden"
           >
-            {/* Module Header */}
+            {/* Module header */}
             <div className="flex justify-between items-center px-5 py-3 bg-green-50 border-b border-gray-200">
               <div className="flex items-center gap-2">
                 <button
@@ -225,7 +227,7 @@ export default function ModuleManager() {
                       expandedModule === module.id ? null : module.id
                     )
                   }
-                  className="text-green-700 hover:text-green-900 transition"
+                  className="text-green-700 hover:text-green-900"
                 >
                   {expandedModule === module.id ? (
                     <ChevronUp size={18} />
@@ -271,55 +273,59 @@ export default function ModuleManager() {
             {/* Lessons */}
             {expandedModule === module.id && (
               <div className="p-5 space-y-3">
-                {module.lessons.length === 0 && (
+                {module.lessons.length === 0 ? (
                   <p className="text-sm text-gray-500">
                     No lessons yet in this module.
                   </p>
+                ) : (
+                  module.lessons.map((lesson) => (
+                    <div
+                      key={lesson.id}
+                      className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 p-3 bg-gray-50 border rounded-lg hover:bg-gray-100 transition"
+                    >
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-800">{lesson.title}</p>
+                        <div className="text-xs text-gray-600 mt-1 line-clamp-2">
+                          <ReactMarkdown>{lesson.content || ''}</ReactMarkdown>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => toast.info(`👁️ Previewing ${lesson.title}`)}
+                          className="text-green-600 hover:text-green-800"
+                        >
+                          <Eye size={14} />
+                        </button>
+                        <button
+                          onClick={() => editLesson(module.id, lesson)}
+                          className="text-blue-600 hover:text-blue-800"
+                        >
+                          <Edit size={14} />
+                        </button>
+                        <button
+                          onClick={() => deleteLesson(module.id, lesson.id)}
+                          className="text-red-600 hover:text-red-800"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))
                 )}
-                {module.lessons.map((lesson) => (
-                  <div
-                    key={lesson.id}
-                    className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100"
-                  >
-                    <div>
-                      <p className="font-medium text-gray-800">{lesson.title}</p>
-                      {lesson.duration && (
-                        <p className="text-xs text-gray-500">
-                          Duration: {lesson.duration}
-                        </p>
-                      )}
-                    </div>
 
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => editLesson(module.id, lesson)}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        <Edit size={14} />
-                      </button>
-                      <button
-                        onClick={() => deleteLesson(module.id, lesson.id)}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-
-                {/* Add Lesson Button */}
+                {/* Add lesson */}
                 <button
                   onClick={() => addLesson(module.id)}
                   className="mt-2 flex items-center gap-2 text-sm text-green-700 hover:text-green-900 transition"
                 >
-                  <PlusCircle size={16} />
-                  Add Lesson
+                  <PlusCircle size={16} /> Add Lesson
                 </button>
               </div>
             )}
           </div>
-        ))}
-      </div>
+        ))
+      )}
 
       {/* Lesson Editor */}
       <LessonEditor
