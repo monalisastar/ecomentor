@@ -1,42 +1,49 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import path from "path";
-import fs from "fs/promises";
 import slugify from "slugify";
 import unzipper from "unzipper";
 import mammoth from "mammoth";
 import AdmZip from "adm-zip";
 import sharp from "sharp";
+import { supabase } from "@/lib/supabase";
 
 /**
- * 🧩 Fallback XML extractor for PPTX text + images (with WebP compression)
+ * 🧩 Fallback XML extractor for PPTX text + images → uploads images to Supabase
  */
 async function extractSlidesFromPptx(buffer: Buffer) {
   const zip = new AdmZip(buffer);
   const entries = zip.getEntries();
 
-  const uploadDir = path.join(process.cwd(), "public", "uploads", "pptx");
-  await fs.mkdir(uploadDir, { recursive: true });
-
   const slideEntries = entries.filter((e) => e.entryName.startsWith("ppt/slides/slide"));
   const imageEntries = entries.filter((e) => e.entryName.startsWith("ppt/media/"));
 
   const imageMap: Record<string, string> = {};
+
   for (const img of imageEntries) {
     const fileName = path.basename(img.entryName, path.extname(img.entryName)) + ".webp";
-    const outputPath = path.join(uploadDir, fileName);
 
     try {
       const inputBuffer = img.getData();
-      await sharp(inputBuffer)
+      const compressed = await sharp(inputBuffer)
         .resize({ width: 1280, withoutEnlargement: true })
         .webp({ quality: 80 })
-        .toFile(outputPath);
-    } catch {
-      await fs.writeFile(outputPath, img.getData());
-    }
+        .toBuffer();
 
-    imageMap[path.basename(img.entryName)] = `/uploads/pptx/${fileName}`;
+      await supabase.storage.from("private-uploads").upload(`pptx/${fileName}`, compressed, {
+        contentType: "image/webp",
+        cacheControl: "3600",
+        upsert: true,
+      });
+
+      const { data: urlData } = supabase.storage
+        .from("private-uploads")
+        .getPublicUrl(`pptx/${fileName}`);
+
+      imageMap[path.basename(img.entryName)] = urlData.publicUrl;
+    } catch (err) {
+      console.error("Image upload error:", err);
+    }
   }
 
   const slides: any[] = [];
@@ -72,12 +79,9 @@ async function extractSlidesFromPptx(buffer: Buffer) {
 }
 
 /**
- * 📚 Auto Import Course Content (with safe slugging + progress)
+ * 📚 Auto Import Course Content — Supabase Storage version
  */
-export async function POST(
-  req: Request,
-  { params }: { params: { courseSlug: string } }
-) {
+export async function POST(req: Request, { params }: { params: { courseSlug: string } }) {
   try {
     console.log("🚀 Import started...");
     const startTime = Date.now();
@@ -96,17 +100,25 @@ export async function POST(
     // 🧠 PPTX parser
     if (ext === ".pptx") {
       console.log("🧩 Parsing PPTX file...");
-      const tempFilePath = path.join(process.cwd(), "temp", `${Date.now()}-${file.name}`);
-      await fs.mkdir(path.dirname(tempFilePath), { recursive: true });
-      await fs.writeFile(tempFilePath, buffer);
+      const pptxFileName = `${Date.now()}-${file.name}`;
+
+      // Upload raw PPTX to Supabase
+      await supabase.storage
+        .from("private-uploads")
+        .upload(`imports/${pptxFileName}`, buffer, {
+          contentType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          cacheControl: "3600",
+          upsert: true,
+        });
 
       const pptxModule = await import("pptx2json");
       const PPTX2Json = (pptxModule as any).default || pptxModule;
       let slides: any[] = [];
 
       try {
-        const parser = new (PPTX2Json as any)(tempFilePath);
-        const result = await parser.toJson(tempFilePath);
+        // Attempt JSON conversion
+        const parser = new (PPTX2Json as any)();
+        const result = await parser.toJson(buffer);
         slides = Array.isArray(result)
           ? result
           : Array.isArray(result?.slides)
@@ -134,8 +146,7 @@ export async function POST(
         });
       }
 
-      await fs.unlink(tempFilePath);
-      console.log("✅ PPTX parsing + image compression completed.");
+      console.log("✅ PPTX parsing + image upload completed.");
     }
 
     // 🧾 DOCX parser
@@ -215,7 +226,7 @@ export async function POST(
     if (currentModule) modules.push(currentModule);
     console.log(`📚 Organized into ${modules.length} module(s).`);
 
-    // 💾 Save to DB with unique slugs
+    // 💾 Save to DB
     console.log("💾 Saving modules and lessons...");
     const course = await prisma.course.findUnique({
       where: { slug: params.courseSlug },
@@ -275,9 +286,6 @@ export async function POST(
     });
   } catch (error: any) {
     console.error("❌ Import Error:", error);
-    return NextResponse.json(
-      { error: "Import failed", details: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Import failed", details: error.message }, { status: 500 });
   }
 }

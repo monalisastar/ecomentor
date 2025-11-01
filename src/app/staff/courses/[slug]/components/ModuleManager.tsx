@@ -19,18 +19,27 @@ import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import type { Lesson, Module } from '@/types/course'
 
+/**
+ * 🧭 ModuleManager — Eco-Mentor Staff Dashboard
+ * ---------------------------------------------------
+ * - Displays all modules & lessons for a course.
+ * - Lets staff add, edit, or delete modules/lessons.
+ * - Automatically opens LessonEditor when a new module is created.
+ */
 export default function ModuleManager() {
   const { slug } = useParams()
   const [modules, setModules] = useState<Module[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedModule, setExpandedModule] = useState<string | null>(null)
+
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null)
   const [targetModuleId, setTargetModuleId] = useState<string | null>(null)
+
   const [modalOpen, setModalOpen] = useState(false)
   const [editingModule, setEditingModule] = useState<Module | null>(null)
 
-  // 🔁 Fetch modules & lessons
+  // 🔁 Fetch all modules
   async function fetchModules(showToast = false) {
     try {
       setLoading(true)
@@ -60,34 +69,27 @@ export default function ModuleManager() {
     return () => window.removeEventListener('imported', handleImported)
   }, [])
 
-  // 💾 Save (create/update) module
-  const handleSaveModule = async (data: { title: string; description?: string }) => {
-    try {
-      if (editingModule) {
-        const res = await fetch(`/api/modules/${editingModule.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        })
-        const updated = await res.json()
-        setModules((prev) =>
-          prev.map((m) => (m.id === editingModule.id ? { ...m, ...updated } : m))
-        )
-        toast.success('✅ Module updated!')
-      } else {
-        const res = await fetch(`/api/modules`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...data, courseSlug: slug }),
-        })
-        const created = await res.json()
-        setModules((prev) => [...prev, created])
-        toast.success('📘 Module added!')
-      }
-    } catch (err) {
-      console.error('Error saving module:', err)
-      toast.error('Could not save module.')
+  // 💾 When a module is created or edited
+  const handleSaveModule = async (savedModule: Module) => {
+    // Update list (edit or create)
+    setModules((prev) => {
+      const exists = prev.find((m) => m.id === savedModule.id)
+      return exists
+        ? prev.map((m) => (m.id === savedModule.id ? savedModule : m))
+        : [...prev, savedModule]
+    })
+
+    // ✅ Automatically open LessonEditor for new module
+    if (!editingModule) {
+      setTargetModuleId(savedModule.id)
+      setEditingLesson(null)
+      setEditorOpen(true)
+      toast.success('📘 Module added — ready to add lessons!')
+    } else {
+      toast.success('✅ Module updated!')
     }
+
+    setEditingModule(null)
   }
 
   // 🗑️ Delete module
@@ -103,21 +105,21 @@ export default function ModuleManager() {
     }
   }
 
-  // ➕ Add lesson
+  // ➕ Add Lesson
   const addLesson = (moduleId: string) => {
     setTargetModuleId(moduleId)
     setEditingLesson(null)
     setEditorOpen(true)
   }
 
-  // ✏️ Edit lesson
+  // ✏️ Edit Lesson
   const editLesson = (moduleId: string, lesson: Lesson) => {
     setTargetModuleId(moduleId)
     setEditingLesson(lesson)
     setEditorOpen(true)
   }
 
-  // 💾 Save lesson
+  // 💾 Save Lesson
   const saveLesson = async (lesson: Lesson): Promise<void> => {
     if (!targetModuleId) return
     try {
@@ -154,7 +156,7 @@ export default function ModuleManager() {
     }
   }
 
-  // 🗑️ Delete lesson
+  // 🗑️ Delete Lesson
   const deleteLesson = async (moduleId: string, lessonId: string) => {
     if (!confirm('Delete this lesson?')) return
     try {
@@ -207,7 +209,7 @@ export default function ModuleManager() {
         </div>
       </div>
 
-      {/* Modules */}
+      {/* Modules List */}
       {modules.length === 0 ? (
         <p className="text-gray-500 text-center py-8">
           No modules yet. Use Auto-Import or Add Module.
@@ -218,7 +220,7 @@ export default function ModuleManager() {
             key={module.id}
             className="border border-gray-200 rounded-lg bg-white shadow-sm overflow-hidden"
           >
-            {/* Module header */}
+            {/* Module Header */}
             <div className="flex justify-between items-center px-5 py-3 bg-green-50 border-b border-gray-200">
               <div className="flex items-center gap-2">
                 <button
@@ -292,7 +294,9 @@ export default function ModuleManager() {
 
                       <div className="flex gap-3">
                         <button
-                          onClick={() => toast.info(`👁️ Previewing ${lesson.title}`)}
+                          onClick={() =>
+                            toast.info(`👁️ Previewing ${lesson.title}`)
+                          }
                           className="text-green-600 hover:text-green-800"
                         >
                           <Eye size={14} />
@@ -314,7 +318,7 @@ export default function ModuleManager() {
                   ))
                 )}
 
-                {/* Add lesson */}
+                {/* ➕ Add Lesson */}
                 <button
                   onClick={() => addLesson(module.id)}
                   className="mt-2 flex items-center gap-2 text-sm text-green-700 hover:text-green-900 transition"
@@ -327,15 +331,16 @@ export default function ModuleManager() {
         ))
       )}
 
-      {/* Lesson Editor */}
+      {/* ✏️ Lesson Editor */}
       <LessonEditor
         open={editorOpen}
         onClose={() => setEditorOpen(false)}
         onSave={saveLesson}
         initialLesson={editingLesson}
+        moduleId={targetModuleId || undefined}
       />
 
-      {/* Module Modal */}
+      {/* 🧱 Module Modal */}
       <ModuleModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
@@ -343,11 +348,13 @@ export default function ModuleManager() {
         initialData={
           editingModule
             ? {
+                id: editingModule.id,
                 title: editingModule.title,
                 description: editingModule.description,
               }
             : null
         }
+        courseId={slug as string}
       />
     </div>
   )

@@ -1,19 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import {
-  X,
-  Save,
-  UploadCloud,
-  Loader2,
-  Eye,
-  Pencil,
-} from 'lucide-react'
+import { X, Save, UploadCloud, Loader2, Eye, Pencil } from 'lucide-react'
 import { apiRequest } from '@/lib/api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Lesson } from '@/types/course'
-import slugify from 'slugify' // ✅ added
+import slugify from 'slugify'
 
 type LessonEditorProps = {
   open: boolean
@@ -39,12 +32,13 @@ export default function LessonEditor({
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [docFile, setDocFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [progress, setProgress] = useState(0)
   const [detecting, setDetecting] = useState(false)
   const [activeTab, setActiveTab] = useState<'write' | 'preview'>('write')
 
   const localKey = moduleId ? `lesson_${moduleId}` : 'lesson_draft'
 
-  // 🧠 Load auto-saved content
+  // 🧠 Load saved draft
   useEffect(() => {
     const saved = localStorage.getItem(localKey)
     if (saved && !initialLesson) {
@@ -61,7 +55,7 @@ export default function LessonEditor({
     }
   }, [localKey, initialLesson])
 
-  // 💾 Auto-save every 3 seconds
+  // 💾 Auto-save draft
   useEffect(() => {
     const interval = setInterval(() => {
       if (title || content || duration || videoUrl || documentUrl) {
@@ -72,7 +66,7 @@ export default function LessonEditor({
     return () => clearInterval(interval)
   }, [title, duration, content, videoUrl, documentUrl, localKey])
 
-  // 🧠 Auto-detect existing lesson for this module
+  // 🧠 Fetch existing lesson for module
   useEffect(() => {
     const fetchExistingLesson = async () => {
       if (!moduleId || initialLesson) return
@@ -96,7 +90,7 @@ export default function LessonEditor({
     fetchExistingLesson()
   }, [moduleId, initialLesson])
 
-  // Prefill when editing manually
+  // Prefill on edit
   useEffect(() => {
     if (initialLesson) {
       setTitle(initialLesson.title || '')
@@ -107,26 +101,54 @@ export default function LessonEditor({
     }
   }, [initialLesson])
 
-  // 📤 Upload files
+  // 📤 Upload with progress
   const handleFileUpload = async (file: File, type: 'video' | 'document') => {
     const formData = new FormData()
     formData.append('file', file)
-    formData.append('type', type)
+    formData.append('context', 'lesson') // ensures storage under lessons/
+
     try {
       setUploading(true)
-      const res = await apiRequest('upload', 'POST', formData, true)
-      if (type === 'video') setVideoUrl(res.url)
-      else setDocumentUrl(res.url)
-      alert(`${type} uploaded successfully.`)
+      setProgress(0)
+
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', '/api/upload')
+
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percent = Math.round((event.loaded / event.total) * 100)
+          setProgress(percent)
+        }
+      }
+
+      xhr.onload = async () => {
+        if (xhr.status === 200) {
+          const res = JSON.parse(xhr.responseText)
+          if (type === 'video') setVideoUrl(res.url)
+          else setDocumentUrl(res.url)
+          alert(`${type} uploaded successfully!`)
+        } else {
+          alert(`Failed to upload ${type}.`)
+          console.error(xhr.responseText)
+        }
+        setUploading(false)
+        setProgress(0)
+      }
+
+      xhr.onerror = () => {
+        setUploading(false)
+        alert('Upload failed. Please try again.')
+      }
+
+      xhr.send(formData)
     } catch (err) {
       console.error('Upload failed:', err)
       alert(`Failed to upload ${type}.`)
-    } finally {
       setUploading(false)
     }
   }
 
-  // 💾 Save (✅ fixed slug issue)
+  // 💾 Save Lesson
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim()) {
@@ -136,7 +158,7 @@ export default function LessonEditor({
 
     const lesson: Lesson = {
       id: initialLesson?.id || '',
-      slug: initialLesson?.slug || slugify(title, { lower: true }), // ✅ added slug
+      slug: initialLesson?.slug || slugify(title, { lower: true }),
       title,
       duration,
       videoUrl,
@@ -208,13 +230,12 @@ export default function LessonEditor({
             />
           </div>
 
-          {/* 🧾 Markdown Content */}
+          {/* Markdown Content */}
           <div>
             <div className="flex justify-between items-center mb-2">
               <label className="text-sm font-medium text-gray-700">
                 Lesson Content
               </label>
-              {/* Tabs */}
               <div className="flex items-center border rounded-lg overflow-hidden text-sm">
                 <button
                   type="button"
@@ -285,7 +306,7 @@ export default function LessonEditor({
                 ) : (
                   <UploadCloud size={14} />
                 )}
-                Upload Video
+                {uploading ? `Uploading ${progress}%` : 'Upload Video'}
               </button>
             )}
             {videoUrl && (
@@ -323,7 +344,7 @@ export default function LessonEditor({
                 ) : (
                   <UploadCloud size={14} />
                 )}
-                Upload Document
+                {uploading ? `Uploading ${progress}%` : 'Upload Document'}
               </button>
             )}
             {documentUrl && (

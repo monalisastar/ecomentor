@@ -3,16 +3,22 @@
 import { useState, useEffect } from 'react'
 import { X, Save, Loader2 } from 'lucide-react'
 import { apiRequest } from '@/lib/api'
-import type { Module } from '@/types/course' // ✅ unified type import
+import type { Module } from '@/types/course'
 
 type ModuleModalProps = {
   open: boolean
   onClose: () => void
-  onSave: (data: { title: string; description?: string }) => void | Promise<void> // ✅ async safe
+  onSave: (data: Module) => void | Promise<void> // ✅ returns full module
   initialData?: { id?: string; title: string; description?: string } | null
   courseId?: string
 }
 
+/**
+ * 📘 ModuleModal — Add or Edit Course Modules
+ * -------------------------------------------------------
+ * - Handles creation or editing of modules in Eco-Mentor LMS.
+ * - On creation, returns the full saved Module to trigger LessonEditor.
+ */
 export default function ModuleModal({
   open,
   onClose,
@@ -23,8 +29,9 @@ export default function ModuleModal({
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [saving, setSaving] = useState(false)
+  const [progress, setProgress] = useState(0)
 
-  // Prefill when editing
+  // 🧠 Prefill values when editing
   useEffect(() => {
     if (initialData) {
       setTitle(initialData.title)
@@ -37,6 +44,7 @@ export default function ModuleModal({
 
   if (!open) return null
 
+  // 💾 Save Module (Create or Edit)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim()) {
@@ -51,58 +59,74 @@ export default function ModuleModal({
 
     try {
       setSaving(true)
+      setProgress(25)
 
       let saved: Module | null = null
 
-      // 🔗 Create or update via backend API
+      // 🧩 Create or Update via API
       if (initialData?.id) {
         saved = await apiRequest(`modules/${initialData.id}`, 'PATCH', payload)
       } else if (courseId) {
         saved = await apiRequest('modules', 'POST', { ...payload, courseId })
       }
 
-      await onSave(payload)
+      if (!saved) throw new Error('Module not saved.')
+
+      setProgress(100)
+      await onSave(saved) // ✅ Send the full module object to parent
       onClose()
     } catch (err) {
-      console.error('Error saving module:', err)
+      console.error('❌ Error saving module:', err)
       alert('Failed to save module.')
     } finally {
-      setSaving(false)
+      setTimeout(() => {
+        setSaving(false)
+        setProgress(0)
+      }, 500)
     }
   }
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 relative animate-fadeIn">
-        {/* Close */}
+      <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6 relative animate-fadeIn border border-gray-100">
+        {/* ❌ Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 text-gray-500 hover:text-gray-700"
+          className="absolute top-3 right-3 text-gray-500 hover:text-gray-700 transition"
         >
           <X size={20} />
         </button>
 
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">
-          {initialData ? 'Edit Module' : 'Add New Module'}
-        </h2>
+        {/* 🧭 Header */}
+        <div className="mb-4">
+          <h2 className="text-xl font-semibold text-gray-900">
+            {initialData ? 'Edit Module' : 'Add New Module'}
+          </h2>
+          <p className="text-sm text-gray-500">
+            {initialData
+              ? 'Update the module details below.'
+              : 'Create a new module and define its learning scope.'}
+          </p>
+        </div>
 
+        {/* 🧾 Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Module Title */}
+          {/* Title Field */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Module Title *
+              Module Title <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Introduction to Renewable Energy"
+              placeholder="e.g. Fundamentals of GHG Accounting"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:outline-none"
               required
             />
           </div>
 
-          {/* Description */}
+          {/* Description Field */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Description (optional)
@@ -115,13 +139,23 @@ export default function ModuleModal({
             />
           </div>
 
-          {/* Actions */}
-          <div className="flex justify-end gap-3">
+          {/* Progress Bar (shows during save) */}
+          {saving && (
+            <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+              <div
+                className="bg-green-600 h-2 transition-all duration-500"
+                style={{ width: `${progress}%` }}
+              ></div>
+            </div>
+          )}
+
+          {/* 🎛️ Action Buttons */}
+          <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition"
               disabled={saving}
+              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition disabled:opacity-60"
             >
               Cancel
             </button>
