@@ -1,0 +1,243 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+//
+// ✅ Enums
+//
+enum QuestionType {
+  MCQ
+  OPEN_ENDED
+  FILE_UPLOAD
+  NUMERIC
+}
+
+enum CertificateStatus {
+  PENDING
+  VERIFIED
+  REVOKED
+}
+
+//
+// ✅ Authentication & NextAuth Models
+//
+model User {
+  id               String    @id @default(cuid()) @map("_id")
+  name             String?
+  email            String    @unique
+  emailVerified    DateTime?
+  image            String?
+  password         String?
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  roles            String[]  @default(["student"]) // ["student"], ["lecturer"], ["admin"]
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // Relations
+  accounts         Account[]
+  sessions         Session[]
+  enrollments      Enrollment[]
+  certificates     Certificate[]
+  payments         Payment[]
+  progressRecords  ProgressRecord[]
+}
+
+model Account {
+  id                String  @id @default(cuid()) @map("_id")
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid()) @map("_id")
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  id          String   @id @default(cuid()) @map("_id")
+  identifier  String
+  token       String   @unique
+  expires     DateTime
+
+  @@unique([identifier, token])
+}
+
+//
+// ✅ Courses & Learning Structure
+//
+model Course {
+  id             String      @id @default(cuid()) @map("_id")
+  title          String
+  slug           String      @unique
+  description    String?
+  image          String?
+  category       String?     // e.g. "Climate", "AI", "Web3"
+  createdBy      String?     // user email or id of lecturer/admin
+ priceUSD      Float?   // 💰 New field for course pricing in USD
+ published  Boolean   @default(false)
+
+
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  modules       Module[]
+  enrollments   Enrollment[]
+  payments      Payment[]
+
+  @@index([category]) // ✅ kept only one index
+}
+
+model Module {
+  id        String   @id @default(cuid()) @map("_id")
+  title     String
+  order     Int?
+    slug      String   @unique
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons   Lesson[]
+   createdAt DateTime @default(now())      // 👈 add this
+  updatedAt DateTime @updatedAt           // 👈 add this
+
+  @@index([courseId])
+}
+
+model Lesson {
+  id          String   @id @default(cuid()) @map("_id")
+  title       String
+  slug      String   @unique
+  description String?
+  duration    String?
+  videoUrl    String?
+   order       Int?      // 🆕 Add this
+  content     String?   // 🆕 Add this
+  moduleId    String
+  module      Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+ createdAt DateTime @default(now())      // 👈 add this
+  updatedAt DateTime @updatedAt           // 👈 add this
+  @@index([moduleId])
+}
+
+//
+// ✅ Enrollment: links users <-> courses
+//
+model Enrollment {
+  id             String    @id @default(cuid()) @map("_id")
+  userId         String
+  courseId       String
+  progress       Int       @default(0)
+  completed      Boolean   @default(false)
+  enrolledAt     DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // 💰 Payment details
+  paymentStatus  String?   // "PENDING" | "PAID" | "FAILED"
+  paymentMethod  String?
+  paymentRef     String?
+  amountPaid     Float?
+
+  user           User      @relation(fields: [userId], references: [id])
+  course         Course    @relation(fields: [courseId], references: [id])
+  payment        Payment[]
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
+}
+
+//
+// ✅ Certificates
+//
+model Certificate {
+  id              String             @id @default(cuid()) @map("_id")
+  studentId       String
+  studentName     String
+  courseSlug      String
+  courseTitle     String
+  certificateUrl  String?
+  verificationUrl String
+  issueDate       DateTime           @default(now())
+  status          CertificateStatus  @default(PENDING)
+
+  user            User?              @relation(fields: [studentId], references: [id])
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([studentId])
+  @@index([courseSlug])
+}
+
+//
+// ✅ Payments: Records all course enrollment transactions
+//
+model Payment {
+  id             String    @id @default(cuid()) @map("_id")
+  userId         String
+  courseId       String
+  enrollmentId   String?
+
+  amount         Float
+  currency       String      @default("KES")
+  method         String      // MPesa, Card, Crypto, etc.
+  reference      String?     // receipt number / transaction ID
+  status         String      @default("PENDING") // PENDING, SUCCESS, FAILED, REFUNDED
+  gateway        String?     // Payment processor (Stripe, MPesa, etc.)
+  paidAt         DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  // Optional Web3 fields
+  txHash         String?
+  walletFrom     String?
+  walletTo       String?
+
+  // 🔗 Relations
+  user           User        @relation(fields: [userId], references: [id])
+  course         Course      @relation(fields: [courseId], references: [id])
+  enrollment     Enrollment? @relation(fields: [enrollmentId], references: [id])
+
+  @@index([userId])
+  @@index([courseId])
+  @@index([status])
+}
+
+//
+// ✅ ProgressRecord: Tracks lesson completions per student per course
+//
+model ProgressRecord {
+  id           String   @id @default(cuid()) @map("_id")
+  userId       String
+  courseId     String
+  lessonId     String
+  completedAt  DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, lessonId])
+  @@index([courseId])
+}
