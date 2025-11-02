@@ -72,6 +72,7 @@ async function extractSlidesFromPptx(buffer: Buffer) {
         title: texts[0] || `Slide ${i + 1}`,
         texts,
         images,
+        thumbnail: images[0] || null,
       });
   }
 
@@ -79,15 +80,42 @@ async function extractSlidesFromPptx(buffer: Buffer) {
 }
 
 /**
- * 📚 Auto Import Course Content — Supabase Storage version
+ * 📚 Auto Import Course Content — Supabase Storage version + Preview support
  */
 export async function POST(req: Request, { params }: { params: { courseSlug: string } }) {
   try {
     console.log("🚀 Import started...");
     const startTime = Date.now();
 
-    const formData = await req.formData();
-    const file = formData.get("file") as File | null;
+    let file: File | null = null;
+    let isPreview = false;
+    let bucket: string | null = null;
+    let filePath: string | null = null;
+
+    // 🧩 Handle both JSON (Supabase ref) & FormData (direct upload)
+    if (req.headers.get("content-type")?.includes("application/json")) {
+      const body = await req.json();
+      bucket = body.bucket;
+      filePath = body.filePath;
+      isPreview = body.preview === true;
+
+      // ✅ Type-safe null check
+      if (!bucket || !filePath) {
+        return NextResponse.json({ error: "Missing bucket or file path" }, { status: 400 });
+      }
+
+      const { data, error } = await supabase.storage.from(bucket).download(filePath);
+      if (error || !data)
+        return NextResponse.json({ error: "Failed to fetch uploaded file" }, { status: 400 });
+
+      const arrayBuffer = await data.arrayBuffer();
+      file = new File([arrayBuffer], path.basename(filePath));
+    } else {
+      const formData = await req.formData();
+      file = formData.get("file") as File | null;
+      isPreview = formData.get("preview") === "true";
+    }
+
     if (!file) return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
 
     console.log(`📦 Received file: ${file.name}`);
@@ -138,7 +166,8 @@ export async function POST(req: Request, { params }: { params: { courseSlug: str
       for (const [i, slide] of slides.entries()) {
         const text = (slide.texts || []).join("\n");
         const htmlImages =
-          slide.images?.map((url: string) => `<img src="${url}" alt="Slide image"/>`).join("<br/>") || "";
+          slide.images?.map((url: string) => `<img src="${url}" alt="Slide image"/>`).join("<br/>") ||
+          "";
         contentBlocks.push({
           title: slide.title || `Slide ${i + 1}`,
           text: `${text}<br/>${htmlImages}`,
@@ -225,6 +254,16 @@ export async function POST(req: Request, { params }: { params: { courseSlug: str
     }
     if (currentModule) modules.push(currentModule);
     console.log(`📚 Organized into ${modules.length} module(s).`);
+
+    // 👀 PREVIEW MODE — Return structured modules only
+    if (isPreview) {
+      console.log("👀 Preview mode — skipping DB writes");
+      return NextResponse.json({
+        success: true,
+        preview: modules,
+        message: `Parsed ${modules.length} module(s) for preview.`,
+      });
+    }
 
     // 💾 Save to DB
     console.log("💾 Saving modules and lessons...");

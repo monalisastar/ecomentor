@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { X, Save, UploadCloud, Loader2, Eye, Pencil } from 'lucide-react'
+import { X, Save, Loader2, Eye, Pencil } from 'lucide-react'
 import { apiRequest } from '@/lib/api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Lesson } from '@/types/course'
 import slugify from 'slugify'
+import UploadPanel from '@/components/UploadPanel'
 
 type LessonEditorProps = {
   open: boolean
@@ -28,17 +29,13 @@ export default function LessonEditor({
   const [videoUrl, setVideoUrl] = useState('')
   const [documentUrl, setDocumentUrl] = useState('')
   const [content, setContent] = useState('')
-
-  const [videoFile, setVideoFile] = useState<File | null>(null)
-  const [docFile, setDocFile] = useState<File | null>(null)
-  const [uploading, setUploading] = useState(false)
-  const [progress, setProgress] = useState(0)
   const [detecting, setDetecting] = useState(false)
   const [activeTab, setActiveTab] = useState<'write' | 'preview'>('write')
+  const [lessonId, setLessonId] = useState(initialLesson?.id || '')
 
   const localKey = moduleId ? `lesson_${moduleId}` : 'lesson_draft'
 
-  // 🧠 Load saved draft
+  // Load local draft
   useEffect(() => {
     const saved = localStorage.getItem(localKey)
     if (saved && !initialLesson) {
@@ -55,7 +52,7 @@ export default function LessonEditor({
     }
   }, [localKey, initialLesson])
 
-  // 💾 Auto-save draft
+  // Auto-save draft every 3s
   useEffect(() => {
     const interval = setInterval(() => {
       if (title || content || duration || videoUrl || documentUrl) {
@@ -66,7 +63,7 @@ export default function LessonEditor({
     return () => clearInterval(interval)
   }, [title, duration, content, videoUrl, documentUrl, localKey])
 
-  // 🧠 Fetch existing lesson for module
+  // Detect existing lesson automatically
   useEffect(() => {
     const fetchExistingLesson = async () => {
       if (!moduleId || initialLesson) return
@@ -75,11 +72,12 @@ export default function LessonEditor({
         const existing = await apiRequest(`lessons?moduleId=${moduleId}`, 'GET')
         if (existing?.length > 0) {
           const lesson = existing[0]
-          setTitle(lesson.title || '')
-          setDuration(lesson.duration || '')
-          setVideoUrl(lesson.videoUrl || '')
-          setDocumentUrl(lesson.documentUrl || '')
-          setContent(lesson.content || '')
+          setLessonId(lesson.id)
+          setTitle(lesson.title)
+          setDuration(lesson.duration)
+          setVideoUrl(lesson.videoUrl)
+          setDocumentUrl(lesson.documentUrl)
+          setContent(lesson.content)
         }
       } catch (err) {
         console.error('Auto-detect failed:', err)
@@ -90,9 +88,10 @@ export default function LessonEditor({
     fetchExistingLesson()
   }, [moduleId, initialLesson])
 
-  // Prefill on edit
+  // Prefill if editing
   useEffect(() => {
     if (initialLesson) {
+      setLessonId(initialLesson.id || '')
       setTitle(initialLesson.title || '')
       setDuration(initialLesson.duration || '')
       setVideoUrl(initialLesson.videoUrl || '')
@@ -101,63 +100,39 @@ export default function LessonEditor({
     }
   }, [initialLesson])
 
-  // 📤 Upload with progress
-  const handleFileUpload = async (file: File, type: 'video' | 'document') => {
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('context', 'lesson') // ensures storage under lessons/
-
-    try {
-      setUploading(true)
-      setProgress(0)
-
-      const xhr = new XMLHttpRequest()
-      xhr.open('POST', '/api/upload')
-
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          const percent = Math.round((event.loaded / event.total) * 100)
-          setProgress(percent)
-        }
-      }
-
-      xhr.onload = async () => {
-        if (xhr.status === 200) {
-          const res = JSON.parse(xhr.responseText)
-          if (type === 'video') setVideoUrl(res.url)
-          else setDocumentUrl(res.url)
-          alert(`${type} uploaded successfully!`)
-        } else {
-          alert(`Failed to upload ${type}.`)
-          console.error(xhr.responseText)
-        }
-        setUploading(false)
-        setProgress(0)
-      }
-
-      xhr.onerror = () => {
-        setUploading(false)
-        alert('Upload failed. Please try again.')
-      }
-
-      xhr.send(formData)
-    } catch (err) {
-      console.error('Upload failed:', err)
-      alert(`Failed to upload ${type}.`)
-      setUploading(false)
+  // Ensure lesson exists before patching uploads
+  const ensureLessonExists = async () => {
+    if (lessonId) return lessonId
+    if (!title.trim()) {
+      alert('Please enter a lesson title before uploading.')
+      throw new Error('Missing title')
     }
+
+    const newLesson: Lesson = {
+      id: '',
+      slug: slugify(title, { lower: true }),
+      title,
+      duration,
+      videoUrl,
+      documentUrl,
+      content,
+      moduleId: moduleId || '',
+    }
+
+    const created = await apiRequest('lessons', 'POST', newLesson)
+    if (!created?.id) throw new Error('Lesson creation failed')
+    setLessonId(created.id)
+    return created.id
   }
 
-  // 💾 Save Lesson
+  // Save final lesson
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!title.trim()) {
-      alert('Lesson title is required.')
-      return
-    }
+    if (!title.trim()) return alert('Lesson title is required.')
 
+    const id = lessonId || initialLesson?.id || ''
     const lesson: Lesson = {
-      id: initialLesson?.id || '',
+      id,
       slug: initialLesson?.slug || slugify(title, { lower: true }),
       title,
       duration,
@@ -172,11 +147,26 @@ export default function LessonEditor({
     onClose()
   }
 
+  // When upload completes, save the URL to DB
+  const handleFileUploaded = async (url: string, type: 'video' | 'document') => {
+    try {
+      const id = await ensureLessonExists()
+      await apiRequest(`lessons/${id}`, 'PATCH', {
+        [type === 'video' ? 'videoUrl' : 'documentUrl']: url,
+      })
+      if (type === 'video') setVideoUrl(url)
+      else setDocumentUrl(url)
+      console.log(`✅ ${type} uploaded & saved:`, url)
+    } catch (err) {
+      console.error('Failed to save uploaded file:', err)
+    }
+  }
+
   if (!open) return null
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl p-6 relative animate-fadeIn">
+      <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl p-6 relative">
         {/* Close */}
         <button
           onClick={onClose}
@@ -188,7 +178,7 @@ export default function LessonEditor({
         {/* Header */}
         <div className="flex items-center gap-2 mb-4">
           <h2 className="text-lg font-semibold text-gray-900">
-            {initialLesson ? 'Edit Lesson' : 'Add / Auto-Detect Lesson'}
+            {lessonId ? 'Edit Lesson' : 'Add / Auto-Create Lesson'}
           </h2>
           {detecting && (
             <div className="flex items-center gap-1 text-sm text-gray-500">
@@ -198,10 +188,7 @@ export default function LessonEditor({
         </div>
 
         {/* Form */}
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-4 max-h-[80vh] overflow-y-auto pr-1"
-        >
+        <form onSubmit={handleSubmit} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
           {/* Title */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -218,9 +205,7 @@ export default function LessonEditor({
 
           {/* Duration */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Duration
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Duration</label>
             <input
               type="text"
               value={duration}
@@ -233,9 +218,7 @@ export default function LessonEditor({
           {/* Markdown Content */}
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label className="text-sm font-medium text-gray-700">
-                Lesson Content
-              </label>
+              <label className="text-sm font-medium text-gray-700">Lesson Content</label>
               <div className="flex items-center border rounded-lg overflow-hidden text-sm">
                 <button
                   type="button"
@@ -273,9 +256,7 @@ export default function LessonEditor({
             ) : (
               <div className="border border-gray-200 rounded-lg bg-gray-50 p-4 prose prose-green max-w-none text-sm text-gray-800">
                 {content ? (
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {content}
-                  </ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
                 ) : (
                   <p className="text-gray-500 italic">Nothing to preview yet...</p>
                 )}
@@ -286,29 +267,12 @@ export default function LessonEditor({
           {/* Upload Video */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Lesson Video (optional)
+              Lesson Video
             </label>
-            <input
-              type="file"
-              accept="video/*"
-              onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
-              className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm"
+            <UploadPanel
+              fixedContext="videos"
+              onUploaded={(url) => handleFileUploaded(url, 'video')}
             />
-            {videoFile && (
-              <button
-                type="button"
-                onClick={() => handleFileUpload(videoFile, 'video')}
-                disabled={uploading}
-                className="mt-2 flex items-center gap-2 px-3 py-1.5 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition"
-              >
-                {uploading ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <UploadCloud size={14} />
-                )}
-                {uploading ? `Uploading ${progress}%` : 'Upload Video'}
-              </button>
-            )}
             {videoUrl && (
               <a
                 href={videoUrl}
@@ -326,27 +290,10 @@ export default function LessonEditor({
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Lesson Document (PDF, PPT, DOC)
             </label>
-            <input
-              type="file"
-              accept=".pdf,.ppt,.pptx,.doc,.docx"
-              onChange={(e) => setDocFile(e.target.files?.[0] || null)}
-              className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm"
+            <UploadPanel
+              fixedContext="lessons"
+              onUploaded={(url) => handleFileUploaded(url, 'document')}
             />
-            {docFile && (
-              <button
-                type="button"
-                onClick={() => handleFileUpload(docFile, 'document')}
-                disabled={uploading}
-                className="mt-2 flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition"
-              >
-                {uploading ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <UploadCloud size={14} />
-                )}
-                {uploading ? `Uploading ${progress}%` : 'Upload Document'}
-              </button>
-            )}
             {documentUrl && (
               <a
                 href={documentUrl}
@@ -359,7 +306,7 @@ export default function LessonEditor({
             )}
           </div>
 
-          {/* Buttons */}
+          {/* Actions */}
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
             <button
               type="button"
