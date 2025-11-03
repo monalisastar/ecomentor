@@ -1,54 +1,37 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import CourseManagementHeader from './components/CourseManagementHeader'
+import CourseFilters from './components/CourseFilters'
 import CourseTable from './components/CourseTable'
-import { apiRequest } from '@/lib/api'
+import CourseEmptyState from './components/CourseEmptyState'
+import { useCourses } from './hooks/useCourses'
 
 export default function StaffCoursesPage() {
-  const [courses, setCourses] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  // 🔹 Fetch courses from API
-  useEffect(() => {
-    async function fetchCourses() {
-      try {
-        const data = await apiRequest('courses') // ✅ GET /api/courses
-        setCourses(data)
-      } catch (err: any) {
-        setError(err.message || 'Failed to load courses')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchCourses()
-  }, [])
+  const router = useRouter()
+  const { courses, loading, error, refetch, filters, setFilters } = useCourses()
 
   return (
-    <main className="flex flex-col gap-6 p-6 pt-[88px] sm:pt-[96px] transition-all duration-300">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Course Management</h1>
-          <p className="text-gray-600 text-sm">
-            Add, edit, or remove courses from the Eco-Mentor catalog.
-          </p>
-        </div>
-      </div>
+    <main className="p-6 pt-[88px] flex flex-col gap-6">
+      {/* ✅ Header includes both refresh + create buttons */}
+      <CourseManagementHeader
+        onRefresh={refetch}
+        onCreateCourse={() => router.push('/staff/courses/new')}
+      />
 
-      {/* Loading & Error States */}
+      {/* 🔹 Filters */}
+      <CourseFilters filters={filters} setFilters={setFilters} />
+
+      {/* 🔹 Table / Empty / Loading States */}
       {loading && <p className="text-gray-500 text-sm">Loading courses...</p>}
       {error && <p className="text-red-500 text-sm">{error}</p>}
 
-      {/* Courses Table */}
       {!loading && !error && (
-        <section>
-          <CourseTable
-            courses={courses}
-            refreshCourses={() => window.location.reload()}
-          />
-        </section>
+        courses.length > 0 ? (
+          <CourseTable courses={courses} onRefresh={refetch} />
+        ) : (
+          <CourseEmptyState />
+        )
       )}
     </main>
   )

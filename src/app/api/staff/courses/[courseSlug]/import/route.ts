@@ -1,330 +1,310 @@
-import { NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
-import path from "path";
-import slugify from "slugify";
-import unzipper from "unzipper";
-import mammoth from "mammoth";
-import AdmZip from "adm-zip";
-import sharp from "sharp";
-import { supabase } from "@/lib/supabase";
+import { NextResponse } from "next/server"
+import prisma from "@/lib/prisma"
+import path from "path"
+import slugify from "slugify"
+import fs from "fs"
+import JSZip from "jszip"
+import unzipper from "unzipper"
+import mammoth from "mammoth"
+import sharp from "sharp"
+import { supabase } from "@/lib/supabase"
 
 /**
- * 🧩 Fallback XML extractor for PPTX text + images → uploads images to Supabase
+ * 🧩 Fallback PPTX parser using JSZip (handles XML + media uploads)
  */
 async function extractSlidesFromPptx(buffer: Buffer) {
-  const zip = new AdmZip(buffer);
-  const entries = zip.getEntries();
+  const zip = await JSZip.loadAsync(buffer)
+  const entries = Object.keys(zip.files)
 
-  const slideEntries = entries.filter((e) => e.entryName.startsWith("ppt/slides/slide"));
-  const imageEntries = entries.filter((e) => e.entryName.startsWith("ppt/media/"));
+  const slideEntries = entries.filter((e) => e.startsWith("ppt/slides/slide"))
+  const imageEntries = entries.filter((e) => e.startsWith("ppt/media/"))
+  const imageMap: Record<string, string> = {}
 
-  const imageMap: Record<string, string> = {};
-
-  for (const img of imageEntries) {
-    const fileName = path.basename(img.entryName, path.extname(img.entryName)) + ".webp";
+  for (const name of imageEntries) {
+    const imgFile = zip.files[name]
+    if (!imgFile) continue
 
     try {
-      const inputBuffer = img.getData();
+      const inputBuffer = await imgFile.async("nodebuffer")
+      if (!inputBuffer?.length) continue
+
       const compressed = await sharp(inputBuffer)
         .resize({ width: 1280, withoutEnlargement: true })
         .webp({ quality: 80 })
-        .toBuffer();
+        .toBuffer()
 
-      await supabase.storage.from("private-uploads").upload(`pptx/${fileName}`, compressed, {
-        contentType: "image/webp",
-        cacheControl: "3600",
-        upsert: true,
-      });
+      const fileName = `${path.basename(name, path.extname(name))}.webp`
+      await supabase.storage
+        .from("eco-mentor-assets")
+        .upload(`course-import/${fileName}`, compressed, {
+          contentType: "image/webp",
+          cacheControl: "3600",
+          upsert: true,
+        })
 
       const { data: urlData } = supabase.storage
-        .from("private-uploads")
-        .getPublicUrl(`pptx/${fileName}`);
+        .from("eco-mentor-assets")
+        .getPublicUrl(`course-import/${fileName}`)
 
-      imageMap[path.basename(img.entryName)] = urlData.publicUrl;
+      imageMap[path.basename(name)] = urlData.publicUrl
     } catch (err) {
-      console.error("Image upload error:", err);
+      console.error("⚠️ Image upload error:", err)
     }
   }
 
-  const slides: any[] = [];
-  for (const [i, slideEntry] of slideEntries.entries()) {
-    const xml = slideEntry.getData().toString("utf8");
-    const texts = [...xml.matchAll(/<a:t[^>]*>(.*?)<\/a:t>/g)].map((m) => m[1]);
-    const joined = texts.join("\n").trim();
+  const slides: any[] = []
+  for (const [i, name] of slideEntries.entries()) {
+    const slideFile = zip.files[name]
+    if (!slideFile) continue
 
-    const images = [...xml.matchAll(/r:embed="rId\d+"/g)]
-      .map((m) => m[0])
-      .map((rId) => {
-        const relFile = entries.find(
-          (e) =>
-            e.entryName.includes(`_rels/${path.basename(slideEntry.entryName)}.rels`) &&
-            e.getData().toString("utf8").includes(rId)
-        );
-        if (!relFile) return null;
-        const relXml = relFile.getData().toString("utf8");
-        const mediaMatch = relXml.match(/media\/([A-Za-z0-9._-]+)/);
-        return mediaMatch ? imageMap[mediaMatch[1]] : null;
-      })
-      .filter(Boolean);
+    const xml = await slideFile.async("string")
+    const texts = [...xml.matchAll(/<a:t[^>]*>(.*?)<\/a:t>/g)].map((m) => m[1])
+    const joined = texts.join("\n").trim()
 
-    if (joined || images.length)
+    const relFileKey = entries.find((e) => e.includes(`_rels/${path.basename(name)}.rels`))
+    let relXml = ""
+    if (relFileKey) relXml = await zip.files[relFileKey].async("string")
+
+    const mediaMatches = [...relXml.matchAll(/media\/([A-Za-z0-9._-]+)/g)]
+    const images = mediaMatches.map((m) => imageMap[m[1]]).filter(Boolean)
+
+    if (joined || images.length) {
       slides.push({
         title: texts[0] || `Slide ${i + 1}`,
         texts,
         images,
         thumbnail: images[0] || null,
-      });
+      })
+    }
   }
 
-  return slides;
+  return slides
 }
 
+export const runtime = "nodejs"
+
 /**
- * 📚 Auto Import Course Content — Supabase Storage version + Preview support
+ * 📚 Auto Import Course Content — Supabase + JSZip + Preview Support
  */
 export async function POST(req: Request, { params }: { params: { courseSlug: string } }) {
   try {
-    console.log("🚀 Import started...");
-    const startTime = Date.now();
+    console.log("🚀 Course import started for:", params.courseSlug)
+    const start = Date.now()
 
-    let file: File | null = null;
-    let isPreview = false;
-    let bucket: string | null = null;
-    let filePath: string | null = null;
+    let file: File | null = null
+    let isPreview = false
+    let bucket: string | null = null
+    let filePath: string | null = null
 
-    // 🧩 Handle both JSON (Supabase ref) & FormData (direct upload)
+    // 🧠 Determine request type (JSON vs FormData)
     if (req.headers.get("content-type")?.includes("application/json")) {
-      const body = await req.json();
-      bucket = body.bucket;
-      filePath = body.filePath;
-      isPreview = body.preview === true;
+      const body = await req.json()
+      bucket = body.bucket
+      filePath = body.filePath
+      isPreview = body.preview === true
 
-      // ✅ Type-safe null check
-      if (!bucket || !filePath) {
-        return NextResponse.json({ error: "Missing bucket or file path" }, { status: 400 });
-      }
+      if (!bucket || !filePath)
+        return NextResponse.json({ error: "Missing bucket or file path" }, { status: 400 })
 
-      const { data, error } = await supabase.storage.from(bucket).download(filePath);
+      const { data, error } = await supabase.storage.from(bucket).download(filePath)
       if (error || !data)
-        return NextResponse.json({ error: "Failed to fetch uploaded file" }, { status: 400 });
+        return NextResponse.json({ error: "Failed to download file from Supabase" }, { status: 400 })
 
-      const arrayBuffer = await data.arrayBuffer();
-      file = new File([arrayBuffer], path.basename(filePath));
+      const arrayBuffer = await data.arrayBuffer()
+      file = new File([arrayBuffer], path.basename(filePath))
     } else {
-      const formData = await req.formData();
-      file = formData.get("file") as File | null;
-      isPreview = formData.get("preview") === "true";
+      const formData = await req.formData()
+      file = formData.get("file") as File | null
+      isPreview = formData.get("preview") === "true"
     }
 
-    if (!file) return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    if (!file) return NextResponse.json({ error: "No file received" }, { status: 400 })
 
-    console.log(`📦 Received file: ${file.name}`);
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const ext = path.extname(file.name).toLowerCase();
+    console.log(`📦 Processing file: ${file.name}`)
+    const ext = path.extname(file.name).toLowerCase()
+    const buffer = Buffer.from(await file.arrayBuffer())
 
-    let contentBlocks: { title: string; text: string; images?: string[] }[] = [];
+    let contentBlocks: { title: string; text: string; images?: string[] }[] = []
 
-    // 🧠 PPTX parser
+    // 🧠 PPTX PARSER
     if (ext === ".pptx") {
-      console.log("🧩 Parsing PPTX file...");
-      const pptxFileName = `${Date.now()}-${file.name}`;
-
-      // Upload raw PPTX to Supabase
-      await supabase.storage
-        .from("private-uploads")
-        .upload(`imports/${pptxFileName}`, buffer, {
-          contentType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-          cacheControl: "3600",
-          upsert: true,
-        });
-
-      const pptxModule = await import("pptx2json");
-      const PPTX2Json = (pptxModule as any).default || pptxModule;
-      let slides: any[] = [];
+      console.log("🧩 Parsing PPTX file...")
+      let slides: any[] = []
 
       try {
-        // Attempt JSON conversion
-        const parser = new (PPTX2Json as any)();
-        const result = await parser.toJson(buffer);
+        const pptxModule = await import("pptx2json")
+        const PPTX2Json = (pptxModule as any).default || pptxModule
+        const parser = new (PPTX2Json as any)()
+
+        const tmpPath = path.join("/tmp", `${Date.now()}-${Math.random()}.pptx`)
+        await fs.promises.writeFile(tmpPath, buffer)
+        const result = await parser.toJson(tmpPath)
         slides = Array.isArray(result)
           ? result
           : Array.isArray(result?.slides)
           ? result.slides
-          : [];
-
-        if (!slides.length) {
-          console.warn("⚠️ pptx2json returned 0 slides — switching to XML fallback...");
-          slides = await extractSlidesFromPptx(buffer);
-        }
+          : []
+        await fs.promises.unlink(tmpPath)
       } catch (err) {
-        console.error("⚠️ PPTX2Json error:", err);
-        slides = await extractSlidesFromPptx(buffer);
+        console.warn("⚠️ pptx2json failed, falling back to JSZip XML parser:", err)
+        slides = await extractSlidesFromPptx(buffer)
       }
 
-      console.log(`📊 Found ${slides.length} slide(s).`);
-      for (const [i, slide] of slides.entries()) {
-        const text = (slide.texts || []).join("\n");
+      console.log(`📊 Extracted ${slides.length} slide(s)`)
+      contentBlocks = slides.map((slide, i) => {
+        const text = (slide.texts || []).join("\n")
         const htmlImages =
           slide.images?.map((url: string) => `<img src="${url}" alt="Slide image"/>`).join("<br/>") ||
-          "";
-        contentBlocks.push({
+          ""
+        return {
           title: slide.title || `Slide ${i + 1}`,
           text: `${text}<br/>${htmlImages}`,
           images: slide.images || [],
-        });
-      }
-
-      console.log("✅ PPTX parsing + image upload completed.");
+        }
+      })
     }
 
-    // 🧾 DOCX parser
+    // 🧾 DOCX PARSER
     else if (ext === ".docx") {
-      console.log("🧾 Extracting DOCX content...");
-      const result = await mammoth.convertToHtml({ buffer });
+      console.log("🧾 Extracting DOCX content...")
+      const result = await mammoth.convertToHtml({ buffer })
       const sections = result.value
         .split(/<h\d>|<\/h\d>/)
         .map((s: string) => s.trim())
-        .filter(Boolean);
+        .filter(Boolean)
       contentBlocks = sections.map((html, i) => ({
         title: `Section ${i + 1}`,
         text: html,
-      }));
+      }))
     }
 
-    // 📄 PDF parser
+    // 📄 PDF PARSER
     else if (ext === ".pdf") {
-      console.log("📄 Reading PDF text...");
-      const pdfModule = await import("pdf-parse");
-      const pdf = (pdfModule as any).default || pdfModule;
-      const data = await pdf(buffer);
-      const pages = data.text.split(/\n\s*\n/).filter((p: string) => p.trim());
+      console.log("📄 Parsing PDF...")
+      const pdfModule = await import("pdf-parse")
+      const pdf = (pdfModule as any).default || pdfModule
+      const data = await pdf(buffer)
+      const pages = data.text.split(/\n\s*\n/).filter((p: string) => p.trim())
       contentBlocks = pages.map((p: string, i: number) => ({
         title: `Page ${i + 1}`,
         text: `<p>${p.replace(/\n/g, "<br/>")}</p>`,
-      }));
+      }))
     }
 
-    // 📦 ZIP parser
+    // 📦 ZIP PARSER
     else if (ext === ".zip") {
-      console.log("📦 Unzipping .zip file...");
-      const directory = await unzipper.Open.buffer(buffer);
+      console.log("📦 Extracting .zip archive...")
+      const directory = await unzipper.Open.buffer(buffer)
       for (const fileEntry of directory.files) {
         if (fileEntry.path.endsWith(".txt")) {
-          const content = await fileEntry.buffer();
+          const content = await fileEntry.buffer()
           contentBlocks.push({
             title: path.basename(fileEntry.path),
             text: `<p>${content.toString()}</p>`,
-          });
+          })
         }
       }
     } else {
-      return NextResponse.json({ error: "Unsupported file type" }, { status: 400 });
+      return NextResponse.json({ error: "Unsupported file type" }, { status: 400 })
     }
 
-    // 🧱 Structure modules & lessons
-    console.log("🧱 Structuring modules and lessons...");
-    let currentModule: any = null;
-    const modules: any[] = [];
+    // 🧱 STRUCTURE MODULES & LESSONS
+    console.log("🧱 Structuring modules and lessons...")
+    const modules: any[] = []
+    let currentModule: any = null
 
     for (const block of contentBlocks) {
-      const title = block.title.toLowerCase();
+      const title = block.title.toLowerCase()
       if (title.includes("module")) {
-        if (currentModule) modules.push(currentModule);
+        if (currentModule) modules.push(currentModule)
         currentModule = {
           title: block.title,
           slug: slugify(block.title, { lower: true }),
           lessons: [],
-        };
+        }
       } else if (title.includes("lesson")) {
         currentModule?.lessons.push({
           title: block.title,
           slug: slugify(block.title, { lower: true }),
-          content: block.text,
+          textContent: block.text,
           images: block.images || [],
-        });
+        })
       } else {
-        const lastLesson = currentModule?.lessons.at(-1);
+        const lastLesson = currentModule?.lessons.at(-1)
         if (lastLesson) {
-          lastLesson.content += `<br/>${block.text}`;
+          lastLesson.textContent += `<br/>${block.text}`
           if (block.images?.length)
-            lastLesson.images = [...(lastLesson.images || []), ...block.images];
+            lastLesson.images = [...(lastLesson.images || []), ...block.images]
         }
       }
     }
-    if (currentModule) modules.push(currentModule);
-    console.log(`📚 Organized into ${modules.length} module(s).`);
+    if (currentModule) modules.push(currentModule)
+    console.log(`📚 Organized into ${modules.length} module(s)`)
 
-    // 👀 PREVIEW MODE — Return structured modules only
+    // 👀 PREVIEW MODE
     if (isPreview) {
-      console.log("👀 Preview mode — skipping DB writes");
+      console.log("👀 Preview mode active — skipping DB write")
       return NextResponse.json({
         success: true,
         preview: modules,
         message: `Parsed ${modules.length} module(s) for preview.`,
-      });
+      })
     }
 
-    // 💾 Save to DB
-    console.log("💾 Saving modules and lessons...");
-    const course = await prisma.course.findUnique({
-      where: { slug: params.courseSlug },
-    });
-    if (!course) return NextResponse.json({ error: "Course not found" }, { status: 404 });
+    // 💾 DATABASE SAVE
+    console.log("💾 Writing to database...")
+    const course = await prisma.course.findUnique({ where: { slug: params.courseSlug } })
+    if (!course) return NextResponse.json({ error: "Course not found" }, { status: 404 })
 
-    let savedModules = 0,
-      savedLessons = 0;
+    let savedModules = 0
+    let savedLessons = 0
 
     for (const module of modules) {
-      const baseModuleSlug = slugify(module.title, { lower: true });
-      let uniqueModuleSlug = baseModuleSlug;
-      let modCounter = 1;
+      const baseModuleSlug = slugify(module.title, { lower: true })
+      let uniqueModuleSlug = baseModuleSlug
+      let modCounter = 1
 
       while (await prisma.module.findUnique({ where: { slug: uniqueModuleSlug } })) {
-        uniqueModuleSlug = `${baseModuleSlug}-${modCounter++}`;
+        uniqueModuleSlug = `${baseModuleSlug}-${modCounter++}`
       }
 
       const createdModule = await prisma.module.create({
-        data: {
-          title: module.title,
-          slug: uniqueModuleSlug,
-          courseId: course.id,
-        },
-      });
-      savedModules++;
-      console.log(`📘 Module saved: ${module.title}`);
+        data: { title: module.title, slug: uniqueModuleSlug, courseId: course.id },
+      })
+      savedModules++
 
       for (const lesson of module.lessons) {
-        const baseLessonSlug = slugify(lesson.title || "lesson", { lower: true });
-        let uniqueLessonSlug = baseLessonSlug;
-        let counter = 1;
+        const baseLessonSlug = slugify(lesson.title || "lesson", { lower: true })
+        let uniqueLessonSlug = baseLessonSlug
+        let counter = 1
 
         while (await prisma.lesson.findUnique({ where: { slug: uniqueLessonSlug } })) {
-          uniqueLessonSlug = `${baseLessonSlug}-${counter++}`;
+          uniqueLessonSlug = `${baseLessonSlug}-${counter++}`
         }
 
         await prisma.lesson.create({
           data: {
             title: lesson.title,
             slug: uniqueLessonSlug,
-            content: lesson.content,
+            textContent: lesson.textContent, // ✅ corrected field
             moduleId: createdModule.id,
           },
-        });
-        savedLessons++;
-        console.log(`   ➕ Lesson saved: ${lesson.title} (${uniqueLessonSlug})`);
+        })
+        savedLessons++
       }
     }
 
-    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`✅ Import completed in ${duration}s: ${savedModules} module(s), ${savedLessons} lesson(s).`);
+    const duration = ((Date.now() - start) / 1000).toFixed(1)
+    console.log(
+      `✅ Import completed in ${duration}s — ${savedModules} module(s), ${savedLessons} lesson(s).`
+    )
 
     return NextResponse.json({
       success: true,
       message: `Imported ${savedModules} module(s) and ${savedLessons} lesson(s) successfully.`,
-    });
+    })
   } catch (error: any) {
-    console.error("❌ Import Error:", error);
-    return NextResponse.json({ error: "Import failed", details: error.message }, { status: 500 });
+    console.error("❌ Import Error:", error)
+    return NextResponse.json({ error: "Import failed", details: error.message }, { status: 500 })
   }
 }

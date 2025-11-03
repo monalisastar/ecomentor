@@ -7,7 +7,10 @@ import type { NextRequest } from "next/server"
 // ✅ GET /api/lessons/[id]
 // Fetch a single lesson with its parent module & course
 //
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
     const { id } = params
 
@@ -38,9 +41,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 //
 // ✅ PATCH /api/lessons/[id]
 // Update lesson details (Lecturer/Admin only)
+// Supports text, video, and file uploads
 //
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
+    // 🔑 Auth check
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
     if (!token?.email)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -57,18 +65,63 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     const { id } = params
-    const { title, videoUrl, content, order } = await req.json()
+    const {
+      title,
+      description,
+      order,
+      contentType,
+      textContent,
+      fileUrl,
+      fileType,
+      videoUrl,
+      duration,
+    } = await req.json()
 
-    if (!title && !videoUrl && !content && !order)
-      return NextResponse.json({ error: "No valid fields provided" }, { status: 400 })
+    // 🧩 Ensure at least one editable field exists
+    if (
+      !title &&
+      !description &&
+      !order &&
+      !contentType &&
+      !textContent &&
+      !fileUrl &&
+      !fileType &&
+      !videoUrl &&
+      !duration
+    ) {
+      return NextResponse.json(
+        { error: "No valid fields provided for update" },
+        { status: 400 }
+      )
+    }
 
+    // 🏗️ Update lesson
     const updated = await prisma.lesson.update({
       where: { id },
       data: {
         ...(title && { title }),
-        ...(videoUrl && { videoUrl }),
-        ...(content && { content }),
+        ...(description && { description }),
         ...(order && { order }),
+        ...(duration && { duration }),
+        ...(contentType && { contentType }),
+        ...(textContent !== undefined && { textContent }),
+        ...(fileUrl && { fileUrl }),
+        ...(fileType && { fileType }),
+        ...(videoUrl && { videoUrl }),
+      },
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        description: true,
+        order: true,
+        duration: true,
+        contentType: true,
+        textContent: true,
+        fileUrl: true,
+        fileType: true,
+        videoUrl: true,
+        updatedAt: true,
       },
     })
 
@@ -86,7 +139,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 // ✅ DELETE /api/lessons/[id]
 // Remove a lesson (Lecturer/Admin only)
 //
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
     if (!token?.email)
@@ -104,8 +160,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     const { id } = params
-
     const existing = await prisma.lesson.findUnique({ where: { id } })
+
     if (!existing)
       return NextResponse.json({ error: "Lesson not found" }, { status: 404 })
 

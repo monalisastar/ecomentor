@@ -1,16 +1,12 @@
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 import prisma from "@/lib/prisma"
 import { getToken } from "next-auth/jwt"
-import type { NextRequest } from "next/server"
+import slugify from "slugify"
 
 /**
  * 📚 GET /api/courses
  * ---------------------------------------------------------
- * - GET /api/courses → list all published courses
- * - GET /api/courses?byId=xyz → get course by ID
- * - GET /api/courses?slug=abc → get course by slug
- * - GET /api/courses?includeDrafts=true → staff-only, shows unpublished
- * - Optional ?search= and ?category= filters
+ * Handles retrieval of all courses (filtered + single)
  */
 export async function GET(req: NextRequest) {
   try {
@@ -19,27 +15,24 @@ export async function GET(req: NextRequest) {
     const slug = searchParams.get("slug")
     const search = searchParams.get("search")
     const category = searchParams.get("category")
-    const includeDrafts = searchParams.get("includeDrafts") === "true"
+    const scope = searchParams.get("scope")
+    const publishedParam = searchParams.get("published")
 
-    // 🧠 Identify user role (if logged in)
+    // 🧠 Identify user (optional)
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
-    const userRoles = token?.email
-      ? (
-          await prisma.user.findUnique({
-            where: { email: token.email },
-            select: { roles: true },
-          })
-        )?.roles || []
-      : []
+    const userRoles =
+      token?.email
+        ? (
+            await prisma.user.findUnique({
+              where: { email: token.email },
+              select: { roles: true },
+            })
+          )?.roles || []
+        : []
 
     const isStaff = ["lecturer", "admin"].some((r) => userRoles.includes(r))
 
-    // 🔒 Restrict draft access to staff only
-    if (includeDrafts && !isStaff) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
-    // 🧭 Fetch by ID or slug
+    // 🧭 1️⃣ Fetch by ID or Slug
     if (byId || slug) {
       const where = byId ? { id: byId } : { slug: slug! }
 
@@ -47,9 +40,7 @@ export async function GET(req: NextRequest) {
         where,
         include: {
           modules: {
-            include: {
-              lessons: { orderBy: { order: "asc" } },
-            },
+            include: { lessons: { orderBy: { order: "asc" } } },
             orderBy: { order: "asc" },
           },
           enrollments: true,
@@ -59,6 +50,10 @@ export async function GET(req: NextRequest) {
 
       if (!course) {
         return NextResponse.json({ error: "Course not found" }, { status: 404 })
+      }
+
+      if (!isStaff && !course.published) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
       }
 
       const totalLessons = course.modules.reduce(
@@ -79,8 +74,9 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    // 📋 Build filters for list view
+    // 📋 2️⃣ Build filters dynamically
     const filters: any = {}
+
     if (search) {
       filters.OR = [
         { title: { contains: search, mode: "insensitive" } },
@@ -88,21 +84,33 @@ export async function GET(req: NextRequest) {
         { category: { contains: search, mode: "insensitive" } },
       ]
     }
-    if (category)
-      filters.category = { equals: category, mode: "insensitive" }
 
-    // 🚀 Retrieve course list
+    if (category) filters.category = { equals: category }
+    if (scope) filters.scope = { equals: scope }
+
+    if (publishedParam === "true" || publishedParam === "false") {
+      filters.published = publishedParam === "true"
+    }
+
+    // 🚀 3️⃣ Retrieve course list
     const courses = await prisma.course.findMany({
       where: {
         ...filters,
-        ...(includeDrafts
-          ? {} // staff can see all
-          : { published: true }), // only published for public users
+        ...(isStaff ? {} : { published: true }),
       },
-      include: {
-        modules: true,
-        enrollments: true,
-        payments: true,
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        description: true,
+        image: true,
+        category: true,
+        scope: true,
+        priceUSD: true,
+        published: true,
+        instructorId: true,
+        createdAt: true,
+        updatedAt: true,
       },
       orderBy: { createdAt: "desc" },
     })
@@ -120,7 +128,8 @@ export async function GET(req: NextRequest) {
 /**
  * ✍️ POST /api/courses
  * ---------------------------------------------------------
- * Creates new course (lecturer/admin only)
+ * Create a new course (Lecturer/Admin only)
+ * 🔤 Automatically normalizes title → slug (fixes typos, double spaces, etc.)
  */
 export async function POST(req: NextRequest) {
   try {
@@ -130,32 +139,39 @@ export async function POST(req: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { email: token.email },
-      select: { email: true, roles: true },
+      select: { email: true, roles: true, id: true },
     })
 
-    if (!user || !["lecturer", "admin"].some((r) => user.roles.includes(r)))
+    if (!user || !["lecturer", "admin"].some((r) => user.roles.includes(r))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
 
-    const { title, description, image, category, priceUSD, published } =
-      await req.json()
+    const body = await req.json()
+    const { title, description, image, category, scope, priceUSD, published } = body
 
     if (!title)
       return NextResponse.json({ error: "Title is required" }, { status: 400 })
 
-    const slugify = (await import("slugify")).default
-    const baseSlug = slugify(title, { lower: true, strict: true })
+    // ✅ Normalize title before slug creation
+    const cleanedTitle = title
+      .replace(/\s+/g, " ") // collapse multiple spaces
+      .replace(/ssesntials/gi, "ssentials") // fix common typo like "essesntials"
+      .trim()
+
+    const baseSlug = slugify(cleanedTitle, { lower: true, strict: true })
     const uniqueSlug = `${baseSlug}-${Date.now().toString(36)}`
 
     const newCourse = await prisma.course.create({
       data: {
-        title,
+        title: cleanedTitle,
         slug: uniqueSlug,
         description: description || "",
         image: image || "",
-        category: category || "General",
+        category: category || "GHG_ACCOUNTING",
+        scope: scope || null,
         priceUSD: priceUSD ?? 0,
-        createdBy: user.email,
-        published: published ?? false, // 🆕 track published state
+        instructorId: user.id,
+        published: published ?? false,
       },
     })
 
@@ -164,6 +180,96 @@ export async function POST(req: NextRequest) {
     console.error("❌ Error creating course:", error)
     return NextResponse.json(
       { error: "Failed to create course" },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * ✏️ PATCH /api/courses
+ * ---------------------------------------------------------
+ * Update an existing course (Lecturer/Admin only)
+ * Requires ?id= parameter
+ */
+export async function PATCH(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get("id")
+    if (!id)
+      return NextResponse.json({ error: "Course ID is required" }, { status: 400 })
+
+    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+    if (!token?.email)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    const user = await prisma.user.findUnique({
+      where: { email: token.email },
+      select: { email: true, roles: true },
+    })
+
+    if (!user || !["lecturer", "admin"].some((r) => user.roles.includes(r))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    const data = await req.json()
+
+    const updatedCourse = await prisma.course.update({
+      where: { id },
+      data: {
+        title: data.title,
+        description: data.description,
+        category: data.category,
+        scope: data.scope,
+        priceUSD: data.priceUSD,
+        image: data.image,
+        published: data.published,
+        updatedAt: new Date(),
+      },
+    })
+
+    return NextResponse.json(updatedCourse, { status: 200 })
+  } catch (error) {
+    console.error("❌ Error updating course:", error)
+    return NextResponse.json(
+      { error: "Failed to update course" },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * 🗑 DELETE /api/courses
+ * ---------------------------------------------------------
+ * Deletes a course (Lecturer/Admin only)
+ * Requires ?id= parameter
+ */
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get("id")
+    if (!id)
+      return NextResponse.json({ error: "Course ID is required" }, { status: 400 })
+
+    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+    if (!token?.email)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    const user = await prisma.user.findUnique({
+      where: { email: token.email },
+      select: { email: true, roles: true },
+    })
+
+    if (!user || !["lecturer", "admin"].some((r) => user.roles.includes(r))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    await prisma.course.delete({ where: { id } })
+
+    return NextResponse.json({ message: "Course deleted successfully" }, { status: 200 })
+  } catch (error) {
+    console.error("❌ Error deleting course:", error)
+    return NextResponse.json(
+      { error: "Failed to delete course" },
       { status: 500 }
     )
   }

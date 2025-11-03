@@ -23,8 +23,46 @@ enum CertificateStatus {
   REVOKED
 }
 
+enum PrerequisiteType {
+  COURSE_COMPLETION
+  AREA_RESTRICTION
+  CERTIFICATION
+  NONE
+}
+
+enum ClimateCourseCategory {
+    GENERAL
+
+  CLIMATE_FOUNDATIONS
+  CLIMATE_SCIENCE
+  GHG_ACCOUNTING
+  CARBON_PROJECT_DEVELOPMENT
+  MRV_SYSTEMS
+  OFFSET_VERIFICATION
+  CARBON_POLICY
+  CARBON_MARKETS
+  ESG_REPORTING
+  CLIMATE_FINANCE
+  GREEN_INVESTMENT
+  SUSTAINABLE_AGRICULTURE
+  ENERGY_EFFICIENCY
+}
+
+enum GHGScope {
+  SCOPE1
+  SCOPE2
+  SCOPE3
+  CROSS_SCOPE
+}
+
+enum CourseTier {
+  FOUNDATIONAL
+  PROFESSIONAL
+  ADVANCED_PRACTITIONER
+}
+
 //
-// ✅ Authentication & NextAuth Models
+// ✅ Authentication & User Models
 //
 model User {
   id               String    @id @default(cuid()) @map("_id")
@@ -35,17 +73,21 @@ model User {
   password         String?
   resetToken       String?
   resetTokenExpiry DateTime?
-  roles            String[]  @default(["student"]) // ["student"], ["lecturer"], ["admin"]
+  roles            String[]  @default(["student"])
+  bio              String?
+  specialization   String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  // Relations
   accounts         Account[]
   sessions         Session[]
   enrollments      Enrollment[]
   certificates     Certificate[]
   payments         Payment[]
   progressRecords  ProgressRecord[]
+  createdCourses   Course[] @relation("InstructorCourses")
+  reviews          Review[]
+  announcements    Announcement[]
 }
 
 model Account {
@@ -89,7 +131,7 @@ model VerificationToken {
 }
 
 //
-// ✅ Courses & Learning Structure
+// ✅ Core LMS for Climate & Carbon Education
 //
 model Course {
   id             String      @id @default(cuid()) @map("_id")
@@ -97,54 +139,108 @@ model Course {
   slug           String      @unique
   description    String?
   image          String?
-  category       String?     // e.g. "Climate", "AI", "Web3"
-  createdBy      String?     // user email or id of lecturer/admin
- priceUSD      Float?   // 💰 New field for course pricing in USD
- published  Boolean   @default(false)
 
+  category  String?  // instead of enum
+  scope          GHGScope?         
+  methodology    String?            
+  standard       String?            
+  subSector      String?            
+  tier           CourseTier?        
+  track          String?            
+  priceUSD       Float?
+  published      Boolean     @default(false)
+  language       String?     
+  level          String?     
+  duration       String?     
+  tags           String[]    @default([])
+  sdgTargets     String[]    @default([])
+
+  objectives     String?
+  whyTake        String?
+  requirements   String?
+  instructorNotes String?
+
+  prerequisiteType     PrerequisiteType @default(NONE)
+  prerequisiteArea     String?
+  prerequisiteCertificateId String?
+
+  instructorId   String?
+  instructor     User?       @relation("InstructorCourses", fields: [instructorId], references: [id])
+  modules        Module[]
+  enrollments    Enrollment[]
+  payments       Payment[]
+  reviews        Review[]
+  announcements  Announcement[]
+  quizzes        Quiz[]            // ✅ Added this line
+  prerequisites  CoursePrerequisite[] @relation("CourseToPrerequisites")
+  dependentOn    CoursePrerequisite[] @relation("CourseToDependents")
 
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
-  modules       Module[]
-  enrollments   Enrollment[]
-  payments      Payment[]
-
-  @@index([category]) // ✅ kept only one index
+  @@index([category])
+  @@index([instructorId])
 }
 
+
+//
+// ✅ Many-to-Many Prerequisites
+//
+model CoursePrerequisite {
+  id                   String  @id @default(cuid()) @map("_id")
+  courseId             String
+  prerequisiteCourseId String
+
+  course               Course  @relation("CourseToPrerequisites", fields: [courseId], references: [id], onDelete: Cascade)
+  prerequisiteCourse   Course  @relation("CourseToDependents", fields: [prerequisiteCourseId], references: [id], onDelete: Cascade)
+
+  createdAt            DateTime @default(now())
+
+  @@unique([courseId, prerequisiteCourseId])
+  @@index([prerequisiteCourseId])
+}
+
+//
+// ✅ Course Content Hierarchy
+//
 model Module {
-  id        String   @id @default(cuid()) @map("_id")
-  title     String
-  order     Int?
-    slug      String   @unique
-  courseId  String
-  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  lessons   Lesson[]
-   createdAt DateTime @default(now())      // 👈 add this
-  updatedAt DateTime @updatedAt           // 👈 add this
+  id          String    @id @default(cuid()) @map("_id")
+  title       String
+  slug        String    @unique
+  objectives  String?   // 👈 Add this
+  order       Int?
+  description String?
+  courseId    String
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons     Lesson[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([courseId])
 }
 
 model Lesson {
-  id          String   @id @default(cuid()) @map("_id")
-  title       String
-  slug      String   @unique
-  description String?
-  duration    String?
-  videoUrl    String?
-   order       Int?      // 🆕 Add this
-  content     String?   // 🆕 Add this
-  moduleId    String
-  module      Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
- createdAt DateTime @default(now())      // 👈 add this
-  updatedAt DateTime @updatedAt           // 👈 add this
+  id           String   @id @default(cuid()) @map("_id")
+  title        String
+  slug         String   @unique
+  description  String?
+  order        Int?
+  duration     String?
+  contentType  String?
+  textContent  String?
+  fileUrl      String?
+  fileType     String?
+  videoUrl     String?
+  moduleId     String
+  module       Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
   @@index([moduleId])
 }
 
 //
-// ✅ Enrollment: links users <-> courses
+// ✅ Enrollment & Progress
 //
 model Enrollment {
   id             String    @id @default(cuid()) @map("_id")
@@ -154,9 +250,7 @@ model Enrollment {
   completed      Boolean   @default(false)
   enrolledAt     DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
-
-  // 💰 Payment details
-  paymentStatus  String?   // "PENDING" | "PAID" | "FAILED"
+  paymentStatus  String?
   paymentMethod  String?
   paymentRef     String?
   amountPaid     Float?
@@ -193,7 +287,7 @@ model Certificate {
 }
 
 //
-// ✅ Payments: Records all course enrollment transactions
+// ✅ Payments
 //
 model Payment {
   id             String    @id @default(cuid()) @map("_id")
@@ -203,20 +297,18 @@ model Payment {
 
   amount         Float
   currency       String      @default("KES")
-  method         String      // MPesa, Card, Crypto, etc.
-  reference      String?     // receipt number / transaction ID
-  status         String      @default("PENDING") // PENDING, SUCCESS, FAILED, REFUNDED
-  gateway        String?     // Payment processor (Stripe, MPesa, etc.)
+  method         String
+  reference      String?
+  status         String      @default("PENDING")
+  gateway        String?
   paidAt         DateTime?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
-  // Optional Web3 fields
   txHash         String?
   walletFrom     String?
   walletTo       String?
 
-  // 🔗 Relations
   user           User        @relation(fields: [userId], references: [id])
   course         Course      @relation(fields: [courseId], references: [id])
   enrollment     Enrollment? @relation(fields: [enrollmentId], references: [id])
@@ -227,7 +319,7 @@ model Payment {
 }
 
 //
-// ✅ ProgressRecord: Tracks lesson completions per student per course
+// ✅ Lesson Progress Tracking
 //
 model ProgressRecord {
   id           String   @id @default(cuid()) @map("_id")
@@ -240,4 +332,67 @@ model ProgressRecord {
 
   @@unique([userId, lessonId])
   @@index([courseId])
+}
+
+//
+// ✅ Course Reviews
+//
+model Review {
+  id         String   @id @default(cuid()) @map("_id")
+  courseId   String
+  userId     String
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now())
+
+  course     Course   @relation(fields: [courseId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@unique([courseId, userId])
+  @@index([rating])
+}
+
+//
+// ✅ Announcements
+//
+model Announcement {
+  id         String   @id @default(cuid()) @map("_id")
+  courseId   String
+  authorId   String
+  title      String
+  message    String
+  published  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  course     Course   @relation(fields: [courseId], references: [id])
+  author     User     @relation(fields: [authorId], references: [id])
+
+  @@index([courseId])
+  @@index([authorId])
+}
+
+//
+// ✅ Quiz Scaffold (optional/future)
+//
+model Quiz {
+  id          String   @id @default(cuid()) @map("_id")
+  courseId    String
+  title       String
+  description String?
+  createdAt   DateTime @default(now())
+
+  course      Course   @relation(fields: [courseId], references: [id])
+  questions   Question[]
+}
+
+model Question {
+  id          String   @id @default(cuid()) @map("_id")
+  quizId      String
+  text        String
+  type        QuestionType
+  options     String[]
+  answer      String?
+  points      Int? @default(1)
+
+  quiz        Quiz @relation(fields: [quizId], references: [id])
 }

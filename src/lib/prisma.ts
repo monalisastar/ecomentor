@@ -1,13 +1,18 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@prisma/client"
 
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
 
 const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log: ["query", "error", "warn"],
-  });
+    // ✅ Only log minimal info in dev, nothing in production
+    log:
+      process.env.NODE_ENV === "development"
+        ? ["warn", "error"] // optional: add "info" if you want summary logs
+        : ["error"],
+  })
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+// Prevent multiple Prisma clients during hot reload in dev
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma
 
-export default prisma; // ✅ critical line — adds default export
+export default prisma

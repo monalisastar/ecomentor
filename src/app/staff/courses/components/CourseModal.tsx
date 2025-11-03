@@ -1,208 +1,251 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { X, Save, Loader2 } from 'lucide-react'
-import { apiRequest } from '@/lib/api'
+import { useState } from 'react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
+import { toast } from 'sonner'
+import { Loader2, ImagePlus } from 'lucide-react'
 import UploadPanel from '@/components/UploadPanel'
 
-type CourseFormData = {
-  id?: string
-  title: string
-  description: string
-  priceUSD?: number
-  image?: string
-}
-
-type CourseModalProps = {
+interface CourseModalProps {
   open: boolean
   onClose: () => void
-  onSave: (course: CourseFormData) => void
-  initialData?: CourseFormData | null
+  onCourseCreated?: () => void
 }
 
 export default function CourseModal({
   open,
   onClose,
-  onSave,
-  initialData,
+  onCourseCreated,
 }: CourseModalProps) {
-  const [formData, setFormData] = useState<CourseFormData>({
-    title: '',
-    description: '',
-    priceUSD: undefined,
-    image: '',
-  })
-  const [loading, setLoading] = useState(false)
-  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null)
+  const [title, setTitle] = useState('')
+  const [category, setCategory] = useState('')
+  const [tier, setTier] = useState('')
+  const [scope, setScope] = useState('')
+  const [priceUSD, setPriceUSD] = useState('')
+  const [language, setLanguage] = useState('English')
+  const [description, setDescription] = useState('')
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
-  // Prefill form when editing existing course
-  useEffect(() => {
-    if (initialData) {
-      setFormData(initialData)
-      setUploadedUrl(initialData.image || null)
-    } else {
-      setFormData({ title: '', description: '', priceUSD: undefined, image: '' })
-      setUploadedUrl(null)
+  const handleCreate = async () => {
+    if (!title || !category) {
+      toast.error('Title and category are required.')
+      return
     }
-  }, [initialData])
-
-  // Handle text field change
-  const handleChange = (field: keyof CourseFormData, value: string | number) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-  }
-
-  // Save course data
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!formData.title) return alert('Please enter a course title.')
 
     try {
-      setLoading(true)
+      setSaving(true)
+      const res = await fetch('/api/courses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          category,
+          tier,
+          scope,
+          priceUSD: parseFloat(priceUSD) || 0,
+          language,
+          description,
+          image: imageUrl,
+        }),
+      })
 
-      // 🧠 Auto-slugify title
-      const slug = formData.title
-        .toLowerCase()
-        .replace(/\s+/g, '-')
-        .replace(/[^a-z0-9-]/g, '')
-
-      const payload = {
-        title: formData.title,
-        slug,
-        description: formData.description,
-        priceUSD: formData.priceUSD ?? 0,
-        image: uploadedUrl || formData.image || '',
-      }
-
-      // Update or create
-      let saved
-      if (initialData?.id) {
-        saved = await apiRequest(`courses/${initialData.id}`, 'PATCH', payload)
-      } else {
-        saved = await apiRequest('courses', 'POST', payload)
-      }
-
-      onSave(saved)
+      if (!res.ok) throw new Error('Failed to create course')
+      toast.success('Course created successfully!')
+      await onCourseCreated?.()
       onClose()
-    } catch (err) {
-      console.error('❌ Error saving course:', err)
-      alert('Failed to save course. Please try again.')
+
+      // reset
+      setTitle('')
+      setDescription('')
+      setCategory('')
+      setTier('')
+      setScope('')
+      setImageUrl(null)
+      setPriceUSD('')
+      setLanguage('English')
+    } catch (err: any) {
+      toast.error(err.message || 'Error creating course')
     } finally {
-      setLoading(false)
+      setSaving(false)
     }
   }
 
-  if (!open) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6 relative">
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 text-gray-500 hover:text-gray-700"
-        >
-          <X size={20} />
-        </button>
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl bg-white rounded-xl">
+        <DialogHeader>
+          <DialogTitle>Create New Course</DialogTitle>
+        </DialogHeader>
 
-        {/* Header */}
-        <h2 className="text-xl font-semibold text-gray-800 mb-4">
-          {initialData ? 'Edit Course' : 'Add New Course'}
-        </h2>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Course Title */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Course Title <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={formData.title}
-              onChange={(e) => handleChange('title', e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 outline-none"
-              placeholder="e.g. GHG Accounting for Beginners"
-            />
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
-            </label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => handleChange('description', e.target.value)}
-              rows={3}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 outline-none resize-none"
-              placeholder="Briefly describe this course..."
-            />
-          </div>
-
-          {/* Price */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Price (USD)
-            </label>
-            <input
-              type="number"
-              value={formData.priceUSD ?? ''}
-              onChange={(e) => handleChange('priceUSD', Number(e.target.value))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 outline-none"
-              placeholder="e.g. 49.99"
-              step="0.01"
-              min="0"
-            />
-          </div>
-
-          {/* UploadPanel for Course Image */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Course Image
-            </label>
-            <UploadPanel />
-          </div>
-
-          {/* Image Preview */}
-          {uploadedUrl && (
-            <div className="mt-3">
+        <div className="grid gap-4 py-4">
+          {/* 🖼 Cover Image */}
+          <div className="flex flex-col gap-2">
+            <Label>Course Cover Image</Label>
+            {imageUrl ? (
               <img
-                src={uploadedUrl}
-                alt="Course Preview"
-                className="w-24 h-24 rounded-lg border border-gray-300 object-cover"
+                src={imageUrl}
+                alt="Course Cover"
+                className="w-full h-48 object-cover rounded-lg border"
+              />
+            ) : (
+              <div className="border border-dashed border-gray-300 rounded-lg p-4 text-center text-gray-500">
+                <ImagePlus className="mx-auto mb-2" />
+                Upload a course cover
+              </div>
+            )}
+
+            {/* IMPORTANT: UploadPanel now returns an array of files */}
+            <UploadPanel
+              fixedContext="course-covers"
+              fileType="image"
+              multiple={false}
+              onUploaded={(files) => {
+                const first = files?.[0]?.url ?? null
+                setImageUrl(first)
+              }}
+            />
+          </div>
+
+          {/* 🏷 Title */}
+          <div className="flex flex-col gap-2">
+            <Label>Course Title</Label>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Introduction to Carbon Accounting"
+            />
+          </div>
+
+          {/* 🌿 Category */}
+          <div className="flex flex-col gap-2">
+            <Label>Category</Label>
+            <Select onValueChange={setCategory} value={category}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="GHG_ACCOUNTING">GHG Accounting</SelectItem>
+                <SelectItem value="CARBON_PROJECT_DEVELOPMENT">
+                  Carbon Project Development
+                </SelectItem>
+                <SelectItem value="CARBON_MARKETS">Carbon Markets</SelectItem>
+                <SelectItem value="MRV_SYSTEMS">MRV Systems</SelectItem>
+                <SelectItem value="CARBON_POLICY">Carbon Policy</SelectItem>
+                <SelectItem value="CLIMATE_FINANCE">Climate Finance</SelectItem>
+                <SelectItem value="SUSTAINABLE_AGRICULTURE">
+                  Sustainable Agriculture
+                </SelectItem>
+                <SelectItem value="ENERGY_EFFICIENCY">Energy Efficiency</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* 🧩 Tier + Scope */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-2">
+              <Label>Tier</Label>
+              <Select onValueChange={setTier} value={tier}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select tier" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="FOUNDATIONAL">Foundational</SelectItem>
+                  <SelectItem value="PROFESSIONAL">Professional</SelectItem>
+                  <SelectItem value="ADVANCED_PRACTITIONER">
+                    Advanced Practitioner
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label>GHG Scope</Label>
+              <Select onValueChange={setScope} value={scope}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select scope" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="SCOPE1">Scope 1</SelectItem>
+                  <SelectItem value="SCOPE2">Scope 2</SelectItem>
+                  <SelectItem value="SCOPE3">Scope 3</SelectItem>
+                  <SelectItem value="CROSS_SCOPE">Cross-Scope</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* 💬 Description */}
+          <div className="flex flex-col gap-2">
+            <Label>Description</Label>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Briefly describe what this course covers..."
+              rows={4}
+            />
+          </div>
+
+          {/* 🌐 Language + Price */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-2">
+              <Label>Language</Label>
+              <Select onValueChange={setLanguage} value={language}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select language" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="English">English</SelectItem>
+                  <SelectItem value="Swahili">Swahili</SelectItem>
+                  <SelectItem value="French">French</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label>Price (USD)</Label>
+              <Input
+                type="number"
+                value={priceUSD}
+                onChange={(e) => setPriceUSD(e.target.value)}
+                placeholder="e.g. 59.99"
               />
             </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 transition disabled:opacity-60"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition disabled:opacity-60"
-            >
-              {loading ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save size={16} />
-                  Save
-                </>
-              )}
-            </button>
           </div>
-        </form>
-      </div>
-    </div>
+        </div>
+
+        {/* Footer */}
+        <DialogFooter className="flex justify-end gap-3">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCreate}
+            disabled={saving}
+            className="bg-green-700 hover:bg-green-800 text-white flex items-center gap-2"
+          >
+            {saving && <Loader2 className="animate-spin" size={18} />}
+            {saving ? 'Saving...' : 'Create Course'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

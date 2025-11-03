@@ -1,113 +1,126 @@
 'use client'
 
-import { useState } from "react"
-import { useParams, useRouter } from "next/navigation"
-import { toast } from "sonner"
+import { useState, useEffect } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import { Loader2, PlusCircle } from 'lucide-react'
+import { toast } from 'sonner'
 
-import CourseHeader from "./components/CourseHeader"
-import CourseStatus from "./components/CourseStatus"
-import CourseInfoForm from "./components/CourseInfoForm"
-import CourseAutoImport from "./components/CourseAutoImport"
-import CourseModulesList from "./components/CourseModulesList"
-import CourseAddModuleModal from "./components/CourseAddModuleModal"
-import CourseActions from "./components/CourseActions"
-
-import { useCourseModules } from "./hooks/useCourseModules"
+import { Button } from '@/components/ui/button'
+import CourseOverview from './components/CourseOverview'
+import ModuleList from './components/ModuleList'
+import ModuleAddModal from './components/ModuleAddModal'
 
 export default function CourseEditorPage() {
   const { slug } = useParams()
   const router = useRouter()
-  const {
-    modules,
-    fetchModules,
-    loadingModules,
-    showAddModal,
-    setShowAddModal,
-    handleAddModule,
-    creatingModule,
-    newModuleTitle,
-    setNewModuleTitle,
-  } = useCourseModules(slug as string)
 
-  const [title, setTitle] = useState("")
-  const [description, setDescription] = useState("")
-  const [published, setPublished] = useState(false)
+  const [course, setCourse] = useState<any>(null)
+  const [modules, setModules] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showAddModal, setShowAddModal] = useState(false)
 
-  const handleSave = async () => {
+  // ✅ Fetch course details and modules
+  const fetchCourseData = async () => {
     try {
-      const res = await fetch("/api/staff/courses/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug, title, description }),
-      })
+      setLoading(true)
+
+      // 🔧 Updated: query param instead of path param
+      const res = await fetch(`/api/courses?slug=${slug}`)
+
+      if (!res.ok) throw new Error('Failed to fetch course details')
       const data = await res.json()
-      if (data.success) toast.success("✅ Course saved successfully!")
-      else toast.error("⚠️ Failed to save course.")
-    } catch (error) {
-      console.error(error)
-      toast.error("❌ Error saving course.")
+
+      // Your /api/courses?slug=... returns the course object directly
+      setCourse(data)
+      setModules(data.modules || [])
+    } catch (error: any) {
+      console.error('Error loading course:', error)
+      toast.error(error.message || 'Error loading course.')
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handlePublish = async () => {
-    if (!confirm("Are you sure you want to publish this course?")) return
-    try {
-      const res = await fetch("/api/staff/courses/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug, title, description }),
-      })
-      const data = await res.json()
-      if (data.success) {
-        setPublished(true)
-        toast.success("🎉 Course published successfully!")
-      } else toast.error("⚠️ Failed to publish course.")
-    } catch (error) {
-      console.error(error)
-      toast.error("❌ Error publishing course.")
-    }
+  useEffect(() => {
+    if (slug) fetchCourseData()
+  }, [slug])
+
+  const handleModuleCreated = async () => {
+    await fetchCourseData()
+    toast.success('Module added successfully!')
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-[#0f2027] via-[#203a43] to-[#2c5364]">
+        <Loader2 size={40} className="animate-spin text-white/70" />
+      </div>
+    )
+  }
+
+  if (!course) {
+    return (
+      <main className="flex flex-col items-center justify-center h-screen bg-[#0f2027] text-white">
+        <p className="text-gray-300 text-lg">Course not found.</p>
+        <Button
+          onClick={() => router.push('/staff/courses')}
+          className="mt-4 bg-green-600 hover:bg-green-700"
+        >
+          Back to Courses
+        </Button>
+      </main>
+    )
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 p-6 pt-[88px] space-y-10">
-      <CourseHeader
-        slug={slug as string}
-        title={title}
-        setTitle={setTitle}
-        onSave={handleSave}
-      />
+    <main className="min-h-screen bg-gradient-to-br from-[#0f2027] via-[#203a43] to-[#2c5364] p-6 pt-[88px] text-white relative">
+      <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px]" />
 
-      <CourseStatus published={published} slug={slug as string} />
+      {/* Header Section */}
+      <div className="relative z-10 max-w-6xl mx-auto mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-white drop-shadow-md">
+            {course.title}
+          </h1>
+          <p className="text-gray-300">{course.description}</p>
+        </div>
 
-      <CourseInfoForm
-        title={title}
-        setTitle={setTitle}
-        description={description}
-        setDescription={setDescription}
-      />
+        <Button
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white shadow-lg transition-all"
+        >
+          <PlusCircle size={18} />
+          Add Module
+        </Button>
+      </div>
 
-      <CourseAutoImport slug={slug as string} fetchModules={fetchModules} />
+      {/* Course Overview */}
+      <div className="relative z-10 max-w-6xl mx-auto mb-10">
+        <CourseOverview
+          slug={slug as string}
+          title={course.title}
+          description={course.description}
+          category={course.category}
+          published={course.published}
+          onSave={fetchCourseData}
+        />
+      </div>
 
-      <CourseModulesList
-        modules={modules}
-        fetchModules={fetchModules}
-        loadingModules={loadingModules}
-        onAddModule={() => setShowAddModal(true)}
-      />
+      {/* Module List */}
+      <div className="relative z-10 max-w-6xl mx-auto">
+        <ModuleList
+          courseSlug={slug as string}
+          modules={modules}
+          onRefreshModules={fetchCourseData}
+        />
+      </div>
 
-      <CourseActions
-        slug={slug as string}
-        published={published}
-        onPublish={handlePublish}
-      />
-
-      <CourseAddModuleModal
-        show={showAddModal}
+      {/* Add Module Modal */}
+      <ModuleAddModal
+        open={showAddModal}
         onClose={() => setShowAddModal(false)}
-        newModuleTitle={newModuleTitle}
-        setNewModuleTitle={setNewModuleTitle}
-        onAdd={handleAddModule}
-        creating={creatingModule}
+        courseSlug={slug as string}
+        onModuleCreated={handleModuleCreated}
       />
     </main>
   )

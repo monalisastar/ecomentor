@@ -1,159 +1,157 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Pencil, Trash2, PlusCircle } from 'lucide-react'
 import Link from 'next/link'
-import { apiRequest } from '@/lib/api'
-import CourseModal from './CourseModal'
+import { useState } from 'react'
+import { Eye, Pencil, Trash2, CheckCircle2, Clock } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { formatDistanceToNow } from 'date-fns'
+import { toast } from 'sonner' // ✅ add toast for feedback
 
-export type Course = {
+interface Course {
   id: string
   title: string
   slug: string
-  description: string
-  unlockWithAERA?: number
+  category?: string
+  tier?: string
+  scope?: string
+  published?: boolean
+  priceUSD?: number
+  createdAt?: string
+  updatedAt?: string
 }
 
-export default function CourseTable({ courses: initialCourses = [], refreshCourses }: any) {
-  const [courses, setCourses] = useState<Course[]>(initialCourses)
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editingCourse, setEditingCourse] = useState<Course | null>(null)
-  const [loading, setLoading] = useState(false)
+interface CourseTableProps {
+  courses: Course[]
+  onRefresh?: () => Promise<void> | void
+}
 
-  // ✅ Fetch courses (if not passed from parent)
-  useEffect(() => {
-    if (initialCourses.length === 0) {
-      fetchCourses()
-    }
-  }, [])
+export default function CourseTable({ courses, onRefresh }: CourseTableProps) {
+  const [deleting, setDeleting] = useState<string | null>(null)
 
-  async function fetchCourses() {
-    try {
-      setLoading(true)
-      const data = await apiRequest('courses')
-      setCourses(data)
-    } catch (err) {
-      console.error('Error loading courses:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // ➕ Add new course
-  const handleAddCourse = () => {
-    setEditingCourse(null)
-    setModalOpen(true)
-  }
-
-  // 📝 Edit existing course
-  const handleEditCourse = (course: Course) => {
-    setEditingCourse(course)
-    setModalOpen(true)
-  }
-
-  // 🗑️ Delete course (API)
-  const handleDeleteCourse = async (id: string) => {
+  // ✅ Updated delete logic
+  const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this course?')) return
     try {
-      await apiRequest(`courses/${id}`, 'DELETE')
-      setCourses((prev) => prev.filter((c) => c.id !== id))
-    } catch (err) {
-      console.error('Error deleting course:', err)
-      alert('Failed to delete course')
-    }
-  }
+      setDeleting(id)
 
-  // 💾 Save (add or edit) → backend sync
-  const handleSaveCourse = async (data: Omit<Course, 'id'>) => {
-    try {
-      if (editingCourse) {
-        const updated = await apiRequest(`courses/${editingCourse.id}`, 'PATCH', data)
-        setCourses((prev) =>
-          prev.map((c) => (c.id === editingCourse.id ? updated : c))
-        )
-      } else {
-        const created = await apiRequest('courses', 'POST', data)
-        setCourses((prev) => [...prev, created])
+      // ✅ Use query param instead of path param
+      const res = await fetch(`/api/courses?id=${id}`, { method: 'DELETE' })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to delete course')
       }
-      setModalOpen(false)
-    } catch (err) {
-      console.error('Error saving course:', err)
-      alert('Failed to save course')
+
+      toast.success('🗑️ Course deleted successfully!')
+      await onRefresh?.()
+    } catch (error: any) {
+      console.error('Error deleting course:', error)
+      toast.error(error.message || '❌ Failed to delete course')
+    } finally {
+      setDeleting(null)
     }
   }
 
   return (
-    <div className="w-full bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-semibold text-gray-900">All Courses</h2>
-        <button
-          onClick={handleAddCourse}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-        >
-          <PlusCircle size={18} />
-          Add Course
-        </button>
-      </div>
+    <div className="overflow-x-auto border border-gray-200 rounded-xl shadow-sm bg-white">
+      <table className="min-w-full text-sm text-left">
+        <thead className="bg-gray-100 text-gray-700 uppercase text-xs font-semibold">
+          <tr>
+            <th className="px-4 py-3">Title</th>
+            <th className="px-4 py-3">Category</th>
+            <th className="px-4 py-3">Tier</th>
+            <th className="px-4 py-3">Scope</th>
+            <th className="px-4 py-3">Status</th>
+            <th className="px-4 py-3">Price (USD)</th>
+            <th className="px-4 py-3">Last Updated</th>
+            <th className="px-4 py-3 text-right">Actions</th>
+          </tr>
+        </thead>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
-        {loading ? (
-          <p className="text-gray-500 text-sm p-4">Loading courses...</p>
-        ) : (
-          <table className="min-w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-50 border-b">
-                <th className="text-left text-sm font-medium text-gray-700 px-4 py-3">Title</th>
-                <th className="text-left text-sm font-medium text-gray-700 px-4 py-3">Slug</th>
-                <th className="text-left text-sm font-medium text-gray-700 px-4 py-3">Description</th>
-                <th className="text-center text-sm font-medium text-gray-700 px-4 py-3">AERA</th>
-                <th className="text-center text-sm font-medium text-gray-700 px-4 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {courses.map((course) => (
-                <tr key={course.id} className="border-b hover:bg-green-50 transition">
-                  <td className="px-4 py-3 text-sm font-medium text-green-700 hover:text-green-900">
-                    <Link href={`/staff/courses/${course.slug}`}>{course.title}</Link>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{course.slug}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 line-clamp-2 max-w-xs">{course.description}</td>
-                  <td className="px-4 py-3 text-center text-sm text-gray-700">
-                    {course.unlockWithAERA ? `${course.unlockWithAERA} AERA` : '-'}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <div className="flex items-center justify-center gap-3">
-                      <button onClick={() => handleEditCourse(course)} className="text-blue-600 hover:text-blue-800">
-                        <Pencil size={16} />
-                      </button>
-                      <button onClick={() => handleDeleteCourse(course.id)} className="text-red-600 hover:text-red-800">
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+        <tbody className="divide-y divide-gray-100">
+          {courses.map((course) => (
+            <tr key={course.id} className="hover:bg-gray-50 transition-all duration-150">
+              <td className="px-4 py-3 font-medium text-gray-800">
+                <Link
+                  href={`/staff/courses/${course.slug}/edit`}
+                  className="hover:text-green-700"
+                >
+                  {course.title}
+                </Link>
+              </td>
 
-              {courses.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="text-center text-gray-500 py-8 text-sm">
-                    No courses available. Add one to get started.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        )}
-      </div>
+              <td className="px-4 py-3 text-gray-700">
+                {course.category?.replace(/_/g, ' ') || '-'}
+              </td>
 
-      {/* Modal */}
-      <CourseModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSave={handleSaveCourse}
-        initialData={editingCourse}
-      />
+              <td className="px-4 py-3 text-gray-700">
+                {course.tier?.replace(/_/g, ' ') || '-'}
+              </td>
+
+              <td className="px-4 py-3 text-gray-700">{course.scope || '-'}</td>
+
+              <td className="px-4 py-3">
+                {course.published ? (
+                  <span className="flex items-center text-green-700 font-medium">
+                    <CheckCircle2 size={16} className="mr-1" />
+                    Published
+                  </span>
+                ) : (
+                  <span className="flex items-center text-yellow-600 font-medium">
+                    <Clock size={16} className="mr-1" />
+                    Draft
+                  </span>
+                )}
+              </td>
+
+              <td className="px-4 py-3 text-gray-700">
+                {course.priceUSD ? `$${course.priceUSD.toFixed(2)}` : '—'}
+              </td>
+
+              <td className="px-4 py-3 text-gray-500 text-xs">
+                {course.updatedAt
+                  ? formatDistanceToNow(new Date(course.updatedAt), { addSuffix: true })
+                  : '—'}
+              </td>
+
+              <td className="px-4 py-3 text-right flex justify-end gap-2">
+                <Link href={`/staff/courses/${course.slug}/edit`}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-1 text-gray-700 hover:text-green-700"
+                  >
+                    <Pencil size={14} />
+                    Edit
+                  </Button>
+                </Link>
+
+                <Link href={`/courses/${course.slug}`}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-1 text-gray-700 hover:text-blue-700"
+                  >
+                    <Eye size={14} />
+                    View
+                  </Button>
+                </Link>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-1 text-red-600 hover:text-red-700"
+                  disabled={deleting === course.id}
+                  onClick={() => handleDelete(course.id)}
+                >
+                  <Trash2 size={14} />
+                  {deleting === course.id ? 'Deleting…' : 'Delete'}
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

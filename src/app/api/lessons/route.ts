@@ -7,6 +7,7 @@ import { nanoid } from "nanoid"
 //
 // ✅ POST /api/lessons
 // Create a new lesson under a module (lecturer/admin only)
+// Supports text, video, or any uploaded file (PDF, PPTX, DOCX, ZIP, etc.)
 //
 export async function POST(req: NextRequest) {
   try {
@@ -25,14 +26,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    // 🔒 Restrict access to lecturers/admins
+    // 🔒 Restrict to lecturers/admins
     const roles = user.roles || ["student"]
     if (!roles.includes("lecturer") && !roles.includes("admin")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    // 📦 Extract body payload
-    const { moduleId, title, videoUrl, content, order } = await req.json()
+    // 📦 Parse payload
+    const { moduleId, title, contentType, textContent, fileUrl, fileType, videoUrl, order } =
+      await req.json()
 
     if (!moduleId || !title) {
       return NextResponse.json(
@@ -41,32 +43,38 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // 🧩 Verify parent module exists
+    // 🧩 Verify module exists
     const module = await prisma.module.findUnique({ where: { id: moduleId } })
     if (!module) {
       return NextResponse.json({ error: "Module not found" }, { status: 404 })
     }
 
-    // 🧩 Auto-assign lesson order if not specified
+    // 🧩 Determine lesson order
     const lessonCount = await prisma.lesson.count({ where: { moduleId } })
     const newOrder = order ?? lessonCount + 1
 
-    // 🏗️ Create the lesson (with slug)
+    // 🏗️ Create lesson
     const newLesson = await prisma.lesson.create({
       data: {
         title,
-        slug: nanoid(10), // 👈 required unique slug
+        slug: nanoid(10),
         moduleId,
-        videoUrl: videoUrl || "",
-        content: content || "",
         order: newOrder,
+        contentType: contentType || "text",
+        textContent: textContent || null,
+        fileUrl: fileUrl || null,
+        fileType: fileType || null,
+        videoUrl: videoUrl || null,
       },
       select: {
         id: true,
         title: true,
         slug: true,
+        contentType: true,
+        textContent: true,
+        fileUrl: true,
+        fileType: true,
         videoUrl: true,
-        content: true,
         order: true,
         moduleId: true,
         createdAt: true,
@@ -103,10 +111,14 @@ export async function GET(req: NextRequest) {
         id: true,
         title: true,
         slug: true,
+        contentType: true,
+        textContent: true,
+        fileUrl: true,
+        fileType: true,
         videoUrl: true,
-        content: true,
         order: true,
         moduleId: true,
+        createdAt: true,
       },
     })
 
