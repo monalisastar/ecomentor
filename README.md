@@ -3,6 +3,10 @@
 A full-stack **Climate Learning Management System (LMS)** built with **Next.js 15, Prisma (MongoDB), NextAuth**, and **Polygon Blockchain** for verified certificate issuance.
 
 ---
+[![Smart Contract Verified on Sourcify](https://img.shields.io/badge/Verified%20on-Sourcify-7b3fe4?logo=ethereum)](https://repo.sourcify.dev/contracts/full_match/80002/0x90fC55187873F18929D63046D7068278409e14Ce/)
+[![Network Polygon](https://img.shields.io/badge/Network-Polygon%20Amoy-8247e5?logo=polygon)](https://amoy.polygonscan.com/address/0x90fC55187873F18929D63046D7068278409e14Ce)
+[![Built with Next.js](https://img.shields.io/badge/Built%20with-Next.js-black?logo=next.js)](https://nextjs.org)
+[![Powered by Vercel](https://img.shields.io/badge/Hosted%20on-Vercel-black?logo=vercel)](https://vercel.com)
 
 ## 🚀 Features
 
