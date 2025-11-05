@@ -28,14 +28,16 @@ export default function LessonList({
 }: LessonListProps) {
   const router = useRouter()
 
+  // 🟢 Empty state (no button)
   if (!lessons || lessons.length === 0) {
     return (
-      <div className="border border-white/10 bg-white/5 rounded-md p-4 text-center text-gray-400 text-sm">
-        No lessons yet. Add one to start building this module.
+      <div className="border border-white/10 bg-white/5 rounded-md p-6 text-center text-gray-400 text-sm">
+        <p>No lessons yet. Add one to start building this module.</p>
       </div>
     )
   }
 
+  // 📋 Lesson list
   return (
     <ul className="space-y-3">
       {lessons.map((lesson) => (
@@ -65,6 +67,7 @@ export default function LessonList({
             </div>
           </div>
 
+          {/* 🧭 Action buttons */}
           <div className="flex gap-2 mt-3 sm:mt-0">
             <Button
               size="sm"
@@ -77,7 +80,7 @@ export default function LessonList({
               }
             >
               <Eye size={14} />
-              Edit
+              View
             </Button>
 
             <Button

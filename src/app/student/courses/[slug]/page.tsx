@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { Menu, X } from 'lucide-react'
 import { apiRequest } from '@/lib/api'
+import { toast } from 'sonner'
 
 import CourseSidebar from './components/CourseSidebar'
 import CourseVideoPlayer from './components/CourseVideoPlayer'
@@ -21,6 +22,7 @@ export default function CourseDetailPage() {
   const [error, setError] = useState('')
   const [enrollmentId, setEnrollmentId] = useState<string | null>(null)
   const [progress, setProgress] = useState<number>(0)
+  const [certificateIssued, setCertificateIssued] = useState(false)
 
   // 🧠 Fetch enrollment and course data
   useEffect(() => {
@@ -30,19 +32,16 @@ export default function CourseDetailPage() {
         const response = await fetch(`/api/enrollments/${slug}`)
         const data = await response.json()
 
-        // 🚫 User not enrolled — redirect to enroll page
         if (response.status === 403) {
           window.location.href = `/student/courses/${slug}/enroll`
           return
         }
 
-        // ❌ Error responses
         if (!response.ok) {
           setError(data.error || 'Failed to load course')
           return
         }
 
-        // ✅ Enrolled user — populate data
         const fetchedCourse = data.course
         if (!fetchedCourse) {
           setError('Course data unavailable')
@@ -52,11 +51,9 @@ export default function CourseDetailPage() {
         setCourse(fetchedCourse)
         setEnrollmentId(data.id)
         setProgress(data.progress || 0)
+        setModules(fetchedCourse.modules || [])
 
-        const fetchedModules = fetchedCourse.modules || []
-        setModules(fetchedModules)
-
-        const firstLesson = fetchedModules[0]?.lessons?.[0]
+        const firstLesson = fetchedCourse.modules?.[0]?.lessons?.[0]
         if (firstLesson) setActiveLesson(firstLesson)
       } catch (err: any) {
         console.error('Error loading course:', err)
@@ -94,7 +91,30 @@ export default function CourseDetailPage() {
         completed: newProgress === 100,
       })
 
-      // Switch to next lesson
+      // ✅ Auto-issue certificate when reaching 100%
+      if (newProgress === 100 && !certificateIssued) {
+        try {
+          const res = await fetch('/api/certificates/auto-issue', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              courseSlug: slug,
+              courseTitle: course?.title,
+            }),
+          })
+
+          if (res.ok) {
+            setCertificateIssued(true)
+            toast.success('🎉 Certificate generated! Awaiting staff verification.')
+          } else {
+            console.error('Certificate issue failed:', await res.text())
+          }
+        } catch (err) {
+          console.error('Error issuing certificate:', err)
+        }
+      }
+
+      // Move to next lesson
       setActiveLesson(nextLesson)
     } catch (err) {
       console.error('Failed to update progress:', err)

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useEffect } from "react";
 import { useSession } from "next-auth/react";
@@ -15,35 +15,44 @@ export default function DashboardRedirect() {
   const router = useRouter();
 
   useEffect(() => {
-    if (status === "loading") return; // Wait until session loads
+    if (status === "loading") return; // Wait for session to load
 
-    // 🔒 No user → login
+    // 🚫 No session → login
     if (!session?.user) {
       router.replace("/login");
       return;
     }
 
-    const email = session.user.email?.toLowerCase();
-    const role =
-      (session.user as { role?: "student" | "staff" | "admin" }).role ||
-      localStorage.getItem("role") ||
-      "student";
+    const email = session.user.email?.toLowerCase() || "";
+    const roles = (session.user as any).roles || [];
+    const primaryRole =
+      roles[0] || (session.user as { role?: string }).role || "student";
 
-    // 🚨 Special emails — force role modal
-    if (email && specialEmails.includes(email)) {
-      console.log("[DashboardRedirect] Special email detected:", email);
+    // 🚨 Dual-role special accounts → force role selection modal
+    if (specialEmails.includes(email)) {
+      console.log(`[DashboardRedirect] Dual-role user detected: ${email}`);
       router.replace("/login?force=true");
       return;
     }
 
-    // ✅ Role-based redirect logic
-    let targetRoute = "/";
-    if (role === "student") targetRoute = "/student/dashboard";
-    else if (role === "staff") targetRoute = "/staff";
-    else if (role === "admin") targetRoute = "/admin";
+    // ⚡ Always enforce admin → /admin/dashboard (no exceptions)
+    if (primaryRole === "admin") {
+      if (window.location.pathname !== "/admin/dashboard") {
+        router.replace("/admin/dashboard");
+      }
+      return;
+    }
 
-    console.log(`[DashboardRedirect] Redirecting ${email} → ${targetRoute}`);
-    router.replace(targetRoute);
+    // ✅ Staff and students follow normal routing
+    if (["staff", "lecturer"].includes(primaryRole)) {
+      if (!window.location.pathname.startsWith("/staff")) {
+        router.replace("/staff/dashboard");
+      }
+    } else {
+      if (!window.location.pathname.startsWith("/student")) {
+        router.replace("/student/dashboard");
+      }
+    }
   }, [session, status, router]);
 
   return (

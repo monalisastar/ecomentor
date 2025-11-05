@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { getToken } from "next-auth/jwt"
 import { CertificateStatus } from "@prisma/client"
+import { randomUUID } from "crypto" // ✅ added import
 import type { NextRequest } from "next/server"
 
 // 📘 /api/enrollments/[id]
@@ -143,6 +144,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
             studentName: user.name || "Student",
             courseSlug: course.slug,
             courseTitle: course.title,
+            verificationId: randomUUID(), // ✅ added
             verificationUrl: `/verify/${id}`,
             status: CertificateStatus.PENDING,
           },

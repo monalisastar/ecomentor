@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import CourseOverview from './components/CourseOverview'
 import ModuleList from './components/ModuleList'
 import ModuleAddModal from './components/ModuleAddModal'
+import CoursePublishButton from './components/CoursePublishButton'
 
 export default function CourseEditorPage() {
   const { slug } = useParams()
@@ -23,14 +24,10 @@ export default function CourseEditorPage() {
   const fetchCourseData = async () => {
     try {
       setLoading(true)
-
-      // 🔧 Updated: query param instead of path param
       const res = await fetch(`/api/courses?slug=${slug}`)
-
       if (!res.ok) throw new Error('Failed to fetch course details')
-      const data = await res.json()
 
-      // Your /api/courses?slug=... returns the course object directly
+      const data = await res.json()
       setCourse(data)
       setModules(data.modules || [])
     } catch (error: any) {
@@ -74,6 +71,7 @@ export default function CourseEditorPage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-[#0f2027] via-[#203a43] to-[#2c5364] p-6 pt-[88px] text-white relative">
+      {/* Glass Overlay */}
       <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px]" />
 
       {/* Header Section */}
@@ -85,13 +83,21 @@ export default function CourseEditorPage() {
           <p className="text-gray-300">{course.description}</p>
         </div>
 
-        <Button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white shadow-lg transition-all"
-        >
-          <PlusCircle size={18} />
-          Add Module
-        </Button>
+        <div className="flex gap-3">
+          <Button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white shadow-lg transition-all"
+          >
+            <PlusCircle size={18} />
+            Add Module
+          </Button>
+
+          {/* ✅ Publish Course Button */}
+          <CoursePublishButton
+            courseSlug={slug as string}
+            isPublished={course.published}
+          />
+        </div>
       </div>
 
       {/* Course Overview */}

@@ -5,7 +5,7 @@ import StudentTable from './components/StudentTable'
 
 export default function StudentsPage() {
   return (
-    <main className="min-h-screen bg-gray-50 p-6 space-y-8">
+    <div className="flex flex-col flex-1 overflow-y-auto bg-gray-50 p-6 space-y-8 mt-4">
       {/* 🧭 Header Section */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -22,7 +22,7 @@ export default function StudentsPage() {
           </div>
         </div>
 
-        {/* Optional actions */}
+        {/* 📤 Export Button */}
         <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
           <Download size={16} />
           Export List
@@ -33,6 +33,6 @@ export default function StudentsPage() {
       <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
         <StudentTable />
       </section>
-    </main>
+    </div>
   )
 }

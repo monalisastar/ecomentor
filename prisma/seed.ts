@@ -1,61 +1,78 @@
-// prisma/seed.ts
 import { PrismaClient } from '@prisma/client'
-import { courseData } from '../src/data/courseData.ts'
-
+import bcrypt from 'bcrypt'
 
 const prisma = new PrismaClient()
 
 async function main() {
-  console.log('🌱 Seeding Eco-Mentor LMS courses...')
+  console.log('🌱 Seeding database...')
 
-  for (const course of courseData) {
-    await prisma.course.upsert({
-      where: { slug: course.slug },
-      update: {
-        title: course.title,
-        description: course.description,
-        image: course.image,
-        unlockWithAERA: course.unlockWithAERA,
-        category: getCategoryFromSlug(course.slug),
-        createdBy: 'system-seed', // ✅ default system marker
-      },
-      create: {
-        id: course.id,
-        title: course.title,
-        slug: course.slug,
-        description: course.description,
-        image: course.image,
-        unlockWithAERA: course.unlockWithAERA,
-        category: getCategoryFromSlug(course.slug),
-        createdBy: 'system-seed',
-      },
+  // 🔑 Hash passwords
+  const adminBrianPass = await bcrypt.hash('Hustler2025@', 10)
+  const adminVirginiaPass = await bcrypt.hash('1980Kinyeki@', 10)
+  const staffBrianPass = await bcrypt.hash('Hustler001@', 10)
+  const marvelPass = await bcrypt.hash('Marvel@2025', 10)
+  const chepkemboiPass = await bcrypt.hash('Chep@2025', 10)
+  const virginiaStaffPass = await bcrypt.hash('Virginia@2025', 10)
+
+  // 👑 Admins
+  const admins = [
+    {
+      name: 'Brian Njau',
+      email: 'njatabrian648@gmail.com',
+      roles: ['admin'],
+      password: adminBrianPass,
+    },
+    {
+      name: 'Virginia Njata',
+      email: 'virginia.njata@gmail.com',
+      roles: ['admin'],
+      password: adminVirginiaPass,
+    },
+  ]
+
+  // 👩🏽‍🏫 Staff
+  const staff = [
+    {
+      name: 'Marvel',
+      email: 'marvel@ecomentor.green',
+      roles: ['staff'],
+      password: marvelPass,
+    },
+    {
+      name: 'Chepkemboi',
+      email: 'chepkemboi@ecomentor.green',
+      roles: ['staff'],
+      password: chepkemboiPass,
+    },
+    {
+      name: 'Brian (Staff)',
+      email: 'brian@ecomentor.green',
+      roles: ['staff'],
+      password: staffBrianPass,
+    },
+    {
+      name: 'Virginia (Staff)',
+      email: 'virginia@ecomentor.green',
+      roles: ['staff'],
+      password: virginiaStaffPass,
+    },
+  ]
+
+  // 💾 Insert or update users
+  for (const user of [...admins, ...staff]) {
+    await prisma.user.upsert({
+      where: { email: user.email },
+      update: { roles: user.roles, password: user.password },
+      create: user,
     })
   }
 
-  console.log('✅ Course seeding complete!')
-}
-
-// 🧩 Helper: simple mapping function for category
-function getCategoryFromSlug(slug: string): string {
-  if (slug.startsWith('climate') || slug.startsWith('carbon') || slug.startsWith('ghg'))
-    return 'Foundational'
-  if (slug.startsWith('scope-')) return 'Sectoral Scopes'
-  if (slug.includes('diploma') || slug.includes('management') || slug.includes('mrv'))
-    return 'Professional Diplomas'
-  if (
-    slug.includes('project') ||
-    slug.includes('policy') ||
-    slug.includes('validation') ||
-    slug.includes('verification') ||
-    slug.includes('digital')
-  )
-    return 'Carbon Projects & Technology'
-  return 'General'
+  console.log('✅ Seed completed successfully!')
 }
 
 main()
-  .catch((e) => {
-    console.error(e)
+  .catch((err) => {
+    console.error(err)
     process.exit(1)
   })
   .finally(async () => {

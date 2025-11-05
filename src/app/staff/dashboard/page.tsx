@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
 import { GraduationCap, Award, Users, TrendingUp } from 'lucide-react'
+import UpcomingTasks from './components/UpcomingTasks' // ✅ Added import
 
 export default function StaffDashboardPage() {
   const { data: session, status } = useSession()
@@ -179,25 +180,13 @@ export default function StaffDashboardPage() {
         </div>
       </section>
 
-      {/* 🎯 Upcoming Tasks */}
+      {/* 🎯 Upcoming Tasks (Dynamic) */}
       <section>
         <h2 className="text-xl font-semibold text-gray-900 mb-4">
           Upcoming Tasks
         </h2>
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <ul className="list-disc list-inside text-gray-700 space-y-2">
-            <li>
-              Review lesson uploads for{' '}
-              <strong>Carbon Developer Essentials</strong>
-            </li>
-            <li>
-              Approve certificate requests for <strong>GHG MRV Course</strong>
-            </li>
-            <li>
-              Respond to student queries in{' '}
-              <strong>Climate Change Intro</strong>
-            </li>
-          </ul>
+          <UpcomingTasks />
         </div>
       </section>
     </main>

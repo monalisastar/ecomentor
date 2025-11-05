@@ -4,67 +4,60 @@ import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import prisma from "@/lib/prisma";
 
-// ✅ Match Prisma role structure
-type Role = "student" | "lecturer" | "admin";
+type Role = "student" | "staff" | "admin";
 
-const specialEmails = [
-  "njatabrian648@gmail.com",
-  "virginia.njata@gmail.com",
-  "trizer.trio56@gmail.com",
-];
+const seededAccounts: Record<string, Role> = {
+  "njatabrian648@gmail.com": "admin",
+  "virginia.njata@gmail.com": "admin",
+  "marvel@ecomentor.green": "staff",
+  "chepkemboi@ecomentor.green": "staff",
+  "brian@ecomentor.green": "staff",
+  "virginia@ecomentor.green": "staff",
+};
 
 export const authOptions: AuthOptions = {
   providers: [
     CredentialsProvider({
       name: "Credentials",
       credentials: {
-        email: { label: "Email", type: "text" },
+        email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials): Promise<User | null> {
         if (!credentials?.email || !credentials?.password)
-          throw new Error("Missing credentials");
+          throw new Error("Missing email or password");
 
         const email = credentials.email.toLowerCase();
-        const password = credentials.password;
-
-        // ✅ Instant login for special emails
-        if (specialEmails.includes(email)) {
-          let user = await prisma.user.findUnique({ where: { email } });
-          if (!user) {
-            user = await prisma.user.create({
-              data: {
-                email,
-                name: email.split("@")[0],
-                roles: ["admin"],
-                password: "",
-              },
-            });
-          }
-
-          return {
-            id: user.id,
-            name: user.name ?? email.split("@")[0],
-            email: user.email,
-            image: user.image ?? null,
-            role: (user.roles?.[0] as Role) || "admin",
-          } as User & { role: Role };
-        }
-
-        // 🔒 Normal user login
         const user = await prisma.user.findUnique({ where: { email } });
-        if (!user) throw new Error("No user found");
 
-        const valid = await bcrypt.compare(password, user.password ?? "");
-        if (!valid) throw new Error("Invalid password");
+        if (!user) throw new Error("No account found for this email");
+        if (!user.password)
+          throw new Error("This account requires Google Sign-In");
+
+        const isValid = await bcrypt.compare(credentials.password, user.password);
+        if (!isValid) throw new Error("Incorrect password");
+
+        // 🧩 Determine correct role (from seeded map or DB)
+        const enforcedRole: Role =
+          seededAccounts[email] ||
+          (user.roles?.[0] as Role) ||
+          "student";
+
+        // 🛠 Sync DB if outdated
+        if (!user.roles?.includes(enforcedRole)) {
+          await prisma.user.update({
+            where: { email },
+            data: { roles: [enforcedRole] },
+          });
+        }
 
         return {
           id: user.id,
           name: user.name ?? email.split("@")[0],
           email: user.email,
           image: user.image ?? null,
-          role: (user.roles?.[0] as Role) || "student",
-        } as User & { role: Role };
+          roles: [enforcedRole], // ✅ Always return array
+        } as User & { roles: Role[] };
       },
     }),
 
@@ -74,56 +67,54 @@ export const authOptions: AuthOptions = {
     }),
   ],
 
-  //
-  // ✅ FIX: Cookie override to allow session on localhost (no HTTPS)
-  //
-  cookies: {
-    sessionToken: {
-      name:
-        process.env.NODE_ENV === "production"
-          ? "__Secure-next-auth.session-token"
-          : "next-auth.session-token",
-      options: {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: process.env.NODE_ENV === "production", // false on localhost
-      },
-    },
-  },
-
   callbacks: {
     async signIn({ user, account }) {
       if (account?.provider === "google" && user?.email) {
         const email = user.email.toLowerCase();
+        const enforcedRole: Role = seededAccounts[email] || "student";
 
         let existingUser = await prisma.user.findUnique({ where: { email } });
+
         if (!existingUser) {
           existingUser = await prisma.user.create({
-            data: { email, roles: ["student"], password: "" },
+            data: {
+              email,
+              name: user.name ?? email.split("@")[0],
+              roles: [enforcedRole],
+              password: "",
+            },
+          });
+        } else if (!existingUser.roles.includes(enforcedRole)) {
+          await prisma.user.update({
+            where: { email },
+            data: { roles: [enforcedRole] },
           });
         }
 
-        (user as { role?: Role }).role =
-          (existingUser.roles?.[0] as Role) || "student";
+        (user as any).roles = [enforcedRole];
       }
+
       return true;
     },
 
-    async jwt({ token, user, trigger, session }) {
-      if (user) {
-        token.role = (user as { role?: Role }).role || "student";
+    async jwt({ token, user }) {
+      if (user) token.roles = (user as any).roles || ["student"];
+
+      // 🧠 Ensure persisted users always reload roles from DB if missing
+      if (!token.roles && token.email) {
+        const dbUser = await prisma.user.findUnique({
+          where: { email: token.email },
+          select: { roles: true },
+        });
+        token.roles = dbUser?.roles || ["student"];
       }
-      if (trigger === "update" && session?.user?.role) {
-        token.role = session.user.role;
-      }
+
       return token;
     },
 
     async session({ session, token }) {
       if (session.user) {
-        (session.user as { role?: Role }).role =
-          (token.role as Role) || "student";
+        (session.user as any).roles = token.roles || ["student"];
       }
       return session;
     },

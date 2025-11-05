@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   PlusCircle,
@@ -16,7 +17,6 @@ import { toast } from 'sonner'
 
 import ModuleAddModal from './ModuleAddModal'
 import LessonList from './LessonList'
-import LessonAddModal from './LessonAddModal'
 
 interface Lesson {
   id: string
@@ -24,7 +24,7 @@ interface Lesson {
   description?: string
   createdAt?: string
   videoUrl?: string
-  fileUrl?: string // ✅ renamed from documentUrl for schema consistency
+  fileUrl?: string
 }
 
 interface Module {
@@ -50,11 +50,10 @@ export default function ModuleList({
   onEditModule,
   onDeleteModule,
 }: ModuleListProps) {
+  const router = useRouter()
   const [expandedModule, setExpandedModule] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
-  const [showLessonModal, setShowLessonModal] = useState(false)
-  const [activeModuleId, setActiveModuleId] = useState<string | null>(null)
 
   // 🔽 Expand/Collapse Module
   const toggleExpand = (id: string) => {
@@ -74,12 +73,6 @@ export default function ModuleList({
     } finally {
       setDeleting(null)
     }
-  }
-
-  // ➕ Open Add Lesson Modal
-  const handleAddLesson = (moduleId: string) => {
-    setActiveModuleId(moduleId)
-    setShowLessonModal(true)
   }
 
   // 🗑️ Delete Lesson
@@ -189,12 +182,17 @@ export default function ModuleList({
                     <LessonList
                       courseSlug={courseSlug}
                       moduleId={mod.id}
-                      lessons={mod.lessons || []} // ✅ prop type now supported
+                      lessons={mod.lessons || []}
                       onDeleteLesson={handleDeleteLesson}
                     />
 
+                    {/* 🟢 Redirect to full Add Lesson Page */}
                     <Button
-                      onClick={() => handleAddLesson(mod.id)}
+                      onClick={() =>
+                        router.push(
+                          `/staff/courses/${courseSlug}/modules/${mod.id}/lessons/new`
+                        )
+                      }
                       size="sm"
                       className="mt-4 flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md"
                     >
@@ -216,16 +214,6 @@ export default function ModuleList({
         courseSlug={courseSlug}
         onModuleCreated={onRefreshModules}
       />
-
-      {/* ➕ Add Lesson Modal */}
-      {activeModuleId && (
-        <LessonAddModal
-          open={showLessonModal}
-          onClose={() => setShowLessonModal(false)}
-          moduleId={activeModuleId}
-          onLessonCreated={onRefreshModules}
-        />
-      )}
     </section>
   )
 }
