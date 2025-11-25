@@ -1,34 +1,39 @@
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 import prisma from "@/lib/prisma"
 import { getToken } from "next-auth/jwt"
-import type { NextRequest } from "next/server"
 
-//
+// ✅ Use Node.js runtime (Prisma cannot run on Edge)
+export const runtime = "nodejs"
+
 // 📘 /api/enrollments
-// - GET:  list enrollments (student → own, admin/lecturer → all)
-// - POST: create new enrollment after payment
-//
+// - GET: List enrollments (student → own, admin/lecturer → all)
+// - POST: Create new enrollment after payment
+// ------------------------------------------------------------
 
-// ✅ GET → fetch enrollments (scoped by role)
+// ✅ GET → Fetch enrollments scoped by user role
 export async function GET(req: NextRequest) {
   try {
-    // 🔑 Decode user token (universal for all roles)
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
-    if (!token || !token.email)
+    if (!token?.email)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+    // 🧠 Lightweight user lookup
     const user = await prisma.user.findUnique({
       where: { email: token.email },
       select: { id: true, roles: true },
     })
-
     if (!user)
       return NextResponse.json({ error: "User not found" }, { status: 404 })
 
     const roles = user.roles || ["student"]
 
-    const includeOptions = {
-      user: { select: { id: true, name: true, email: true } },
+    // 🔍 Optimized field selection to minimize payload
+    const selectFields = {
+      id: true,
+      progress: true,
+      completed: true,
+      paymentStatus: true,
+      enrolledAt: true,
       course: {
         select: {
           id: true,
@@ -36,38 +41,42 @@ export async function GET(req: NextRequest) {
           slug: true,
           image: true,
           category: true,
+          tier: true,
+          scope: true,
         },
       },
     }
 
-    // 🧠 Role-based scope
-    const enrollments =
+    // 🎯 Role-based filtering
+    const whereClause =
       roles.includes("admin") || roles.includes("lecturer")
-        ? await prisma.enrollment.findMany({
-            include: includeOptions,
-            orderBy: { enrolledAt: "desc" },
-          })
-        : await prisma.enrollment.findMany({
-            where: { userId: user.id },
-            include: includeOptions,
-            orderBy: { enrolledAt: "desc" },
-          })
+        ? {}
+        : { userId: user.id }
 
-    return NextResponse.json(enrollments, { status: 200 })
+    // 🚀 Use compound index (courseId, userId) for fast lookups
+    const enrollments = await prisma.enrollment.findMany({
+      where: whereClause,
+      select: selectFields,
+      orderBy: { enrolledAt: "desc" },
+    })
+
+    return NextResponse.json(enrollments, {
+      status: 200,
+      headers: {
+        "Cache-Control": "public, s-maxage=120, stale-while-revalidate=300",
+      },
+    })
   } catch (err) {
-    console.error("GET /enrollments error:", err)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    console.error("GET /api/enrollments error:", err)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
-// ✅ POST → create new enrollment (after payment success)
+// ✅ POST → Create enrollment (after payment)
 export async function POST(req: NextRequest) {
   try {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
-    if (!token || !token.email)
+    if (!token?.email)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const user = await prisma.user.findUnique({
@@ -78,29 +87,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
 
     const { courseId, paymentRef, paymentMethod, amountPaid } = await req.json()
-
     if (!courseId)
       return NextResponse.json(
         { error: "Course ID is required" },
         { status: 400 }
       )
 
-    // 🧩 Verify course existence
-    const course = await prisma.course.findUnique({ where: { id: courseId } })
+    // 🧠 Parallel check for course and duplicate enrollment
+    const [course, existing] = await Promise.all([
+      prisma.course.findUnique({
+        where: { id: courseId },
+        select: { id: true, title: true, slug: true },
+      }),
+      prisma.enrollment.findUnique({
+        where: { userId_courseId: { userId: user.id, courseId } },
+        select: { id: true },
+      }),
+    ])
+
     if (!course)
       return NextResponse.json({ error: "Course not found" }, { status: 404 })
 
-    // 🛑 Prevent duplicate enrollments
-    const existing = await prisma.enrollment.findUnique({
-      where: { userId_courseId: { userId: user.id, courseId } },
-    })
     if (existing)
       return NextResponse.json(
         { error: "Already enrolled in this course" },
         { status: 400 }
       )
 
-    // 💰 Create enrollment record
+    // 💳 Create enrollment
     const enrollment = await prisma.enrollment.create({
       data: {
         userId: user.id,
@@ -110,9 +124,12 @@ export async function POST(req: NextRequest) {
         paymentMethod: paymentMethod || "Manual",
         amountPaid: amountPaid || 0,
         enrolledAt: new Date(),
-        updatedAt: new Date(),
       },
-      include: {
+      select: {
+        id: true,
+        courseId: true,
+        enrolledAt: true,
+        paymentStatus: true,
         course: {
           select: {
             id: true,
@@ -125,12 +142,15 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    return NextResponse.json(enrollment, { status: 201 })
+    // 🧩 Smart response: returns small payload for dashboards
+    return NextResponse.json(enrollment, {
+      status: 201,
+      headers: {
+        "Cache-Control": "no-store", // no cache for writes
+      },
+    })
   } catch (err) {
-    console.error("POST /enrollments error:", err)
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    )
+    console.error("POST /api/enrollments error:", err)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

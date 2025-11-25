@@ -1,5 +1,6 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+import type { NextConfig } from "next"
+
+const nextConfig: NextConfig = {
   reactStrictMode: true,
 
   eslint: {
@@ -10,17 +11,23 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
 
-  // 🧠 Raise allowed body size for file uploads (e.g. lesson PDFs, ZIPs)
   experimental: {
     serverActions: {
-      bodySizeLimit: "25mb", // can go up to "50mb" if needed
+      bodySizeLimit: "25mb",
     },
   },
 
-  // 🖼️ Optional: image optimization
+  // 🖼️ Universal Supabase + Image Optimization Support
   images: {
     formats: ["image/avif", "image/webp"],
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "**.supabase.co", // ✅ wildcard supports any Supabase project
+        pathname: "/storage/v1/object/public/**",
+      },
+    ],
   },
-};
+}
 
-module.exports = nextConfig;
+export default nextConfig

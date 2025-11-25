@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Loader2, PlusCircle } from 'lucide-react'
 import { toast } from 'sonner'
-
 import { Button } from '@/components/ui/button'
 import CourseOverview from './components/CourseOverview'
 import ModuleList from './components/ModuleList'
@@ -19,8 +18,20 @@ export default function CourseEditorPage() {
   const [modules, setModules] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [sessionUser, setSessionUser] = useState<any>(null)
 
-  // ✅ Fetch course details and modules
+  // ✅ Fetch logged-in user
+  const fetchSession = async () => {
+    try {
+      const res = await fetch('/api/auth/session')
+      const data = await res.json()
+      setSessionUser(data?.user || null)
+    } catch (err) {
+      console.error('Failed to load session:', err)
+    }
+  }
+
+  // ✅ Fetch course details
   const fetchCourseData = async () => {
     try {
       setLoading(true)
@@ -39,7 +50,10 @@ export default function CourseEditorPage() {
   }
 
   useEffect(() => {
-    if (slug) fetchCourseData()
+    if (slug) {
+      fetchSession()
+      fetchCourseData()
+    }
   }, [slug])
 
   const handleModuleCreated = async () => {
@@ -69,12 +83,24 @@ export default function CourseEditorPage() {
     )
   }
 
+  // ✅ Enhanced permission logic: creator, admin, or staff can edit
+  const isCreator =
+    sessionUser &&
+    (course?.createdBy?.email === sessionUser?.email ||
+      course?.createdById === sessionUser?.id)
+  const isAdmin =
+    sessionUser?.role === 'ADMIN' ||
+    sessionUser?.roles?.includes('admin')
+  const isStaff =
+    sessionUser?.role === 'STAFF' ||
+    sessionUser?.roles?.includes('staff')
+  const canEdit = isCreator || isAdmin || isStaff
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-[#0f2027] via-[#203a43] to-[#2c5364] p-6 pt-[88px] text-white relative">
-      {/* Glass Overlay */}
       <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px]" />
 
-      {/* Header Section */}
+      {/* Header */}
       <div className="relative z-10 max-w-6xl mx-auto mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white drop-shadow-md">
@@ -83,36 +109,43 @@ export default function CourseEditorPage() {
           <p className="text-gray-300">{course.description}</p>
         </div>
 
-        <div className="flex gap-3">
-          <Button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white shadow-lg transition-all"
-          >
-            <PlusCircle size={18} />
-            Add Module
-          </Button>
+        {canEdit && (
+          <div className="flex gap-3">
+            <Button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white shadow-lg transition-all"
+            >
+              <PlusCircle size={18} />
+              Add Module
+            </Button>
 
-          {/* ✅ Publish Course Button */}
-          <CoursePublishButton
-            courseSlug={slug as string}
-            isPublished={course.published}
-          />
-        </div>
+            <CoursePublishButton
+              courseSlug={slug as string}
+              isPublished={course.published}
+            />
+          </div>
+        )}
       </div>
 
       {/* Course Overview */}
       <div className="relative z-10 max-w-6xl mx-auto mb-10">
-        <CourseOverview
-          slug={slug as string}
-          title={course.title}
-          description={course.description}
-          category={course.category}
-          published={course.published}
-          onSave={fetchCourseData}
-        />
+        {canEdit ? (
+          <CourseOverview
+            slug={slug as string}
+            title={course.title}
+            description={course.description}
+            category={course.category}
+            published={course.published}
+            onSave={fetchCourseData}
+          />
+        ) : (
+          <div className="bg-white/10 rounded-xl p-6 text-gray-300">
+            <p>You do not have permission to edit this course.</p>
+          </div>
+        )}
       </div>
 
-      {/* Module List */}
+      {/* Modules */}
       <div className="relative z-10 max-w-6xl mx-auto">
         <ModuleList
           courseSlug={slug as string}
@@ -122,12 +155,14 @@ export default function CourseEditorPage() {
       </div>
 
       {/* Add Module Modal */}
-      <ModuleAddModal
-        open={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        courseSlug={slug as string}
-        onModuleCreated={handleModuleCreated}
-      />
+      {canEdit && (
+        <ModuleAddModal
+          open={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          courseSlug={slug as string}
+          onModuleCreated={handleModuleCreated}
+        />
+      )}
     </main>
   )
 }

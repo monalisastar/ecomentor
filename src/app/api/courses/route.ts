@@ -4,6 +4,24 @@ import { getToken } from "next-auth/jwt"
 import slugify from "slugify"
 
 /**
+ * 🛡️ Helper: verify roles
+ * ---------------------------------------------------------
+ * Returns true if current user has any allowed role
+ */
+async function hasRole(req: NextRequest, allowed: string[]) {
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+  if (!token?.email) return false
+
+  const user = await prisma.user.findUnique({
+    where: { email: token.email },
+    select: { roles: true },
+  })
+  if (!user) return false
+
+  return allowed.some((r) => user.roles.includes(r))
+}
+
+/**
  * 📚 GET /api/courses
  * ---------------------------------------------------------
  * Handles retrieval of all courses (filtered + single)
@@ -30,7 +48,9 @@ export async function GET(req: NextRequest) {
           )?.roles || []
         : []
 
-    const isStaff = ["lecturer", "admin"].some((r) => userRoles.includes(r))
+    const isStaff = ["lecturer", "admin", "staff"].some((r) =>
+      userRoles.includes(r)
+    )
 
     // 🧭 1️⃣ Fetch by ID or Slug
     if (byId || slug) {
@@ -128,7 +148,7 @@ export async function GET(req: NextRequest) {
 /**
  * ✍️ POST /api/courses
  * ---------------------------------------------------------
- * Create a new course (Lecturer/Admin only)
+ * Create a new course (Lecturer/Admin/Staff only)
  * 🔤 Automatically normalizes title → slug (fixes typos, double spaces, etc.)
  */
 export async function POST(req: NextRequest) {
@@ -142,22 +162,20 @@ export async function POST(req: NextRequest) {
       select: { email: true, roles: true, id: true },
     })
 
-    if (!user || !["lecturer", "admin"].some((r) => user.roles.includes(r))) {
+    const allowedRoles = ["admin", "lecturer", "staff"]
+    const isAuthorized = user && allowedRoles.some((r) => user.roles.includes(r))
+    if (!isAuthorized)
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
 
     const body = await req.json()
-    const { title, description, image, category, scope, priceUSD, published } = body
+    const { title, description, image, category, scope, priceUSD, published } =
+      body
 
     if (!title)
       return NextResponse.json({ error: "Title is required" }, { status: 400 })
 
     // ✅ Normalize title before slug creation
-    const cleanedTitle = title
-      .replace(/\s+/g, " ") // collapse multiple spaces
-      .replace(/ssesntials/gi, "ssentials") // fix common typo like "essesntials"
-      .trim()
-
+    const cleanedTitle = title.replace(/\s+/g, " ").trim()
     const baseSlug = slugify(cleanedTitle, { lower: true, strict: true })
     const uniqueSlug = `${baseSlug}-${Date.now().toString(36)}`
 
@@ -172,6 +190,7 @@ export async function POST(req: NextRequest) {
         priceUSD: priceUSD ?? 0,
         instructorId: user.id,
         published: published ?? false,
+        adminStatus: "APPROVED",
       },
     })
 
@@ -188,7 +207,7 @@ export async function POST(req: NextRequest) {
 /**
  * ✏️ PATCH /api/courses
  * ---------------------------------------------------------
- * Update an existing course (Lecturer/Admin only)
+ * Update an existing course (Lecturer/Admin/Staff only)
  * Requires ?id= parameter
  */
 export async function PATCH(req: NextRequest) {
@@ -196,20 +215,14 @@ export async function PATCH(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const id = searchParams.get("id")
     if (!id)
-      return NextResponse.json({ error: "Course ID is required" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Course ID is required" },
+        { status: 400 }
+      )
 
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
-    if (!token?.email)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-    const user = await prisma.user.findUnique({
-      where: { email: token.email },
-      select: { email: true, roles: true },
-    })
-
-    if (!user || !["lecturer", "admin"].some((r) => user.roles.includes(r))) {
+    const canEdit = await hasRole(req, ["admin", "lecturer", "staff"])
+    if (!canEdit)
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
 
     const data = await req.json()
 
@@ -240,7 +253,7 @@ export async function PATCH(req: NextRequest) {
 /**
  * 🗑 DELETE /api/courses
  * ---------------------------------------------------------
- * Deletes a course (Lecturer/Admin only)
+ * Deletes a course (Lecturer/Admin/Staff only)
  * Requires ?id= parameter
  */
 export async function DELETE(req: NextRequest) {
@@ -248,24 +261,21 @@ export async function DELETE(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const id = searchParams.get("id")
     if (!id)
-      return NextResponse.json({ error: "Course ID is required" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Course ID is required" },
+        { status: 400 }
+      )
 
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
-    if (!token?.email)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-    const user = await prisma.user.findUnique({
-      where: { email: token.email },
-      select: { email: true, roles: true },
-    })
-
-    if (!user || !["lecturer", "admin"].some((r) => user.roles.includes(r))) {
+    const canDelete = await hasRole(req, ["admin", "lecturer", "staff"])
+    if (!canDelete)
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
 
     await prisma.course.delete({ where: { id } })
 
-    return NextResponse.json({ message: "Course deleted successfully" }, { status: 200 })
+    return NextResponse.json(
+      { message: "Course deleted successfully" },
+      { status: 200 }
+    )
   } catch (error) {
     console.error("❌ Error deleting course:", error)
     return NextResponse.json(

@@ -10,6 +10,16 @@ type CourseCardProps = {
   actionButton?: ReactNode
 }
 
+/**
+ * 📘 CourseCard Component
+ * -------------------------------------------------------------
+ * Displays a single course tile with image, title, description,
+ * and action buttons (Enroll / Continue Learning / View).
+ * 
+ * The `unoptimized` flag ensures Supabase-hosted images
+ * render correctly during development and production
+ * without domain config issues.
+ */
 export default function CourseCard({ course, isEnrolled, actionButton }: CourseCardProps) {
   return (
     <div className="bg-white rounded-xl shadow hover:shadow-lg transition p-4 flex flex-col">
@@ -19,12 +29,16 @@ export default function CourseCard({ course, isEnrolled, actionButton }: CourseC
           src={course.image || '/images/default-course.jpg'}
           alt={course.title}
           fill
+          unoptimized   // ✅ disables Next.js optimization for Supabase images
           className="object-cover rounded-lg"
         />
       </div>
 
       {/* 🧠 Title & Description */}
-      <h3 className="font-semibold text-lg mb-2 text-gray-800">{course.title}</h3>
+      <h3 className="font-semibold text-lg mb-2 text-gray-800">
+        {course.title}
+      </h3>
+
       <p className="text-gray-600 text-sm flex-grow line-clamp-3">
         {course.description || 'No description available.'}
       </p>
@@ -34,12 +48,22 @@ export default function CourseCard({ course, isEnrolled, actionButton }: CourseC
         {actionButton ? (
           actionButton
         ) : isEnrolled ? (
-          <Link
-            href={`/student/courses/${course.slug}`}
-            className="block w-full bg-green-600 text-white text-center py-2 rounded-lg hover:bg-green-700 transition"
-          >
-            ✅ Continue Learning
-          </Link>
+          <>
+            <Link
+              href={`/student/courses/${course.slug}`}
+              className="block w-full bg-green-600 text-white text-center py-2 rounded-lg hover:bg-green-700 transition"
+            >
+              ✅ Continue Learning
+            </Link>
+
+            {/* Only show 'View' if enrolled */}
+            <Link
+              href={`/student/courses/${course.slug}`}
+              className="block text-center text-green-600 font-semibold hover:underline"
+            >
+              View →
+            </Link>
+          </>
         ) : (
           <Link
             href={`/student/courses/${course.slug}/enroll`}
@@ -48,13 +72,6 @@ export default function CourseCard({ course, isEnrolled, actionButton }: CourseC
             Enroll Now
           </Link>
         )}
-
-        <Link
-          href={`/student/courses/${course.slug}`}
-          className="block text-center text-green-600 font-semibold hover:underline"
-        >
-          View →
-        </Link>
       </div>
     </div>
   )

@@ -14,36 +14,49 @@ export default function ResetPasswordContent() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
 
+  // 🧭 Ensure token validity on load
   useEffect(() => {
     if (!token) {
-      toast.error('Invalid or missing token.')
+      toast.error('Invalid or missing reset token.')
       router.push('/login')
     }
   }, [token, router])
 
+  // 🚀 Submit new password
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
     if (password !== confirmPassword) {
       toast.error("Passwords don't match.")
       return
     }
 
+    if (password.length < 8) {
+      toast.error("Password must be at least 8 characters long.")
+      return
+    }
+
     setLoading(true)
 
-    const res = await fetch('/api/reset-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, password }),
-    })
+    try {
+      const res = await fetch('/api/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, password }),
+      })
 
-    const data = await res.json()
-    setLoading(false)
+      const data = await res.json()
+      setLoading(false)
 
-    if (res.ok) {
-      toast.success('Password updated! You can now log in.')
-      router.push('/login')
-    } else {
-      toast.error(data.error || 'Something went wrong.')
+      if (res.ok) {
+        toast.success('Password updated! Redirecting...')
+        setTimeout(() => router.push('/login'), 1500)
+      } else {
+        toast.error(data.error || 'Reset link invalid or expired.')
+      }
+    } catch (error) {
+      setLoading(false)
+      toast.error('Something went wrong. Please try again.')
     }
   }
 
@@ -79,11 +92,37 @@ export default function ResetPasswordContent() {
           <button
             type="submit"
             disabled={loading}
-            className={`w-full py-3 rounded font-semibold transition ${
+            className={`w-full py-3 rounded font-semibold flex justify-center items-center gap-2 transition ${
               loading ? 'bg-green-400/60 cursor-wait' : 'bg-green-500 hover:bg-green-600'
             }`}
           >
-            {loading ? 'Resetting...' : 'Reset Password'}
+            {loading ? (
+              <>
+                <svg
+                  className="w-5 h-5 animate-spin"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v8H4z"
+                  ></path>
+                </svg>
+                Resetting...
+              </>
+            ) : (
+              'Reset Password'
+            )}
           </button>
         </form>
       </motion.div>

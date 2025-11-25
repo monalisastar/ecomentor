@@ -1,44 +1,56 @@
-'use client'
+'use client';
 
-import { 
-  HiOutlineBadgeCheck, 
-  HiOutlineChartBar, 
-  HiOutlineDeviceMobile, // ✅ correct icon
-  HiOutlineShieldCheck, 
-  HiOutlineGlobeAlt 
-} from "react-icons/hi";;
-import { motion } from "framer-motion";;
+import {
+  HiOutlineBadgeCheck,
+  HiOutlineChartBar,
+  HiOutlineDeviceMobile,
+  HiOutlineShieldCheck,
+  HiOutlineGlobeAlt,
+} from "react-icons/hi";
+import { motion } from "framer-motion";
+
+// 🧩 Auto-generated static data for CMS
+export const staticData = {
+  p_1: "Explore impactful, practical climate training — made for your future.",
+  p_2: "Eco-Mentor ensures every lesson is verified, engaging, and globally relevant.",
+};
+
+// ✅ Allow CMS overrides
+type FeaturesSectionProps = Partial<typeof staticData>;
 
 const features = [
   {
-    title: 'Recognized Certificates',
-    description: 'Earn credible GHG & climate certificates upon course completion.',
+    title: "Recognized Certificates",
+    description: "Earn credible GHG & climate certificates upon course completion.",
     icon: <HiOutlineBadgeCheck size={32} className="text-green-600" />,
   },
   {
-    title: 'Track Your Progress',
-    description: 'Visual progress tracking keeps you motivated throughout.',
+    title: "Track Your Progress",
+    description: "Visual progress tracking keeps you motivated throughout.",
     icon: <HiOutlineChartBar size={32} className="text-green-600" />,
   },
   {
-    title: 'Learn Anywhere, Anytime',
-    description: 'Responsive LMS works seamlessly across all devices.',
+    title: "Learn Anywhere, Anytime",
+    description: "Responsive LMS works seamlessly across all devices.",
     icon: <HiOutlineDeviceMobile size={32} className="text-green-600" />,
   },
   {
-    title: 'Verified Climate Content',
-    description: 'Backed by UN standards and scientifically validated.',
+    title: "Verified Climate Content",
+    description: "Backed by UN standards and scientifically validated.",
     icon: <HiOutlineShieldCheck size={32} className="text-green-600" />,
   },
   {
-    title: 'Join the Global Community',
-    description: 'Connect with 3,000+ learners across 27+ countries.',
+    title: "Join the Global Community",
+    description: "Connect with 3,000+ learners across 27+ countries.",
     icon: <HiOutlineGlobeAlt size={32} className="text-green-600" />,
     animateSpin: true,
   },
-]
+];
 
-export default function FeaturesSection() {
+export default function FeaturesSection(props: FeaturesSectionProps = {}) {
+  // ✅ Merge CMS data with static defaults
+  const data = { ...staticData, ...props };
+
   return (
     <section className="bg-[#f9fbff] dark:bg-gray-900 text-gray-900 dark:text-white py-20 px-6 md:px-12">
       <div className="max-w-6xl mx-auto text-center">
@@ -46,9 +58,7 @@ export default function FeaturesSection() {
           Why Learn with Eco-Mentor?
         </h2>
 
-        <p className="text-gray-600 dark:text-gray-300 mb-12">
-          Explore impactful, practical climate training — made for your future.
-        </p>
+        <p className="text-gray-600 dark:text-gray-300 mb-12">{data.p_1}</p>
 
         <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-3">
           {features.map((feature, index) => (
@@ -63,21 +73,21 @@ export default function FeaturesSection() {
             >
               <motion.div
                 whileHover={
-                  feature.animateSpin
-                    ? { rotate: 360 }
-                    : { scale: 1.1 }
+                  feature.animateSpin ? { rotate: 360 } : { scale: 1.1 }
                 }
-                transition={{ duration: 0.6, ease: 'easeInOut' }}
+                transition={{ duration: 0.6, ease: "easeInOut" }}
                 className="flex items-center justify-center w-16 h-16 rounded-full bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-700 mb-4"
               >
                 {feature.icon}
               </motion.div>
               <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-300">{feature.description}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                {data.p_2}
+              </p>
             </motion.div>
           ))}
         </div>
       </div>
     </section>
-  )
+  );
 }

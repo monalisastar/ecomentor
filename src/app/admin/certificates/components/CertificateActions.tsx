@@ -1,7 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { CheckCircle2, Ban, RefreshCw, AlertTriangle, Coins } from 'lucide-react'
+import {
+  CheckCircle2,
+  Ban,
+  RefreshCw,
+  AlertTriangle,
+  Coins,
+  Loader2,
+  ExternalLink,
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Certificate {
@@ -11,6 +19,8 @@ interface Certificate {
   studentWallet?: string
   metadataURI?: string
   status: 'PENDING' | 'VERIFIED' | 'REVOKED'
+  blockchainTx?: string | null
+  blockchainNetwork?: string | null
 }
 
 interface Props {
@@ -23,10 +33,12 @@ export default function CertificateActions({ certificate, onActionDone }: Props)
     type: 'VERIFY' | 'REVOKE' | 'RESTORE' | null
     title: string
   }>({ type: null, title: '' })
+
   const [loading, setLoading] = useState(false)
   const [minting, setMinting] = useState(false)
+  const [syncing, setSyncing] = useState(false)
 
-  // 🔧 Update backend certificate status
+  // 🔧 Verify / Revoke / Restore
   const handleAction = async (newStatus: 'VERIFIED' | 'REVOKED' | 'PENDING') => {
     try {
       setLoading(true)
@@ -35,64 +47,94 @@ export default function CertificateActions({ certificate, onActionDone }: Props)
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       })
-
       if (!res.ok) {
         const err = await res.json()
         throw new Error(err.error || 'Failed to update certificate status')
       }
-
       toast.success(
-        `Certificate ${
-          newStatus === 'VERIFIED'
-            ? 'verified successfully.'
-            : newStatus === 'REVOKED'
-            ? 'revoked successfully.'
-            : 'restored to pending.'
-        }`
+        newStatus === 'VERIFIED'
+          ? '✅ Certificate verified successfully.'
+          : newStatus === 'REVOKED'
+          ? '❌ Certificate revoked successfully.'
+          : '🕓 Certificate restored to pending.'
       )
-
       onActionDone()
       setConfirmAction({ type: null, title: '' })
     } catch (err: any) {
       toast.error(err.message)
+      console.error('❌ Status update failed:', err)
     } finally {
       setLoading(false)
     }
   }
 
-  // 🪙 Mint blockchain certificate
-  const handleMint = async () => {
-    if (!certificate.studentWallet || !certificate.metadataURI) {
-      toast.error('Missing student wallet or metadata URI.')
-      return
-    }
+  // 🌐 Polygon Explorer
+  const getExplorerLink = (tx: string, network?: string | null) => {
+    if (!tx) return '#'
+    return network === 'polygon-amoy'
+      ? `https://amoy.polygonscan.com/tx/${tx}`
+      : `https://polygonscan.com/tx/${tx}`
+  }
 
+  // 🪙 Mint on-chain (org wallet)
+  const handleMint = async () => {
+    console.log('🟢 Mint button clicked!', certificate)
     try {
       setMinting(true)
+      toast.loading('⛓️ Minting certificate on blockchain...')
+
       const res = await fetch(`/api/certificates/mint/${certificate.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          studentAddress: certificate.studentWallet,
           metadataURI: certificate.metadataURI,
         }),
       })
 
       const data = await res.json()
-      if (data.success) {
-        toast.success(`✅ Minted on Polygon! Tx: ${data.txHash}`)
-        onActionDone()
-      } else {
-        toast.error(`❌ ${data.error || 'Minting failed'}`)
-      }
+      if (!res.ok || !data.success) throw new Error(data.error || 'Minting failed')
+
+      toast.dismiss()
+      const txHash = data.certificate?.blockchainTx
+      const explorer = getExplorerLink(txHash, data.certificate?.blockchainNetwork)
+
+      toast.success(
+        <div className="flex flex-col items-start gap-1">
+          <span>✅ Minted to Eco-Mentor wallet!</span>
+          {txHash && (
+            <a
+              href={explorer}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-800 inline-flex items-center gap-1 text-xs font-medium"
+            >
+              View Transaction <ExternalLink size={12} />
+            </a>
+          )}
+        </div>
+      )
+
+      // 🕓 Ensure database is synced before refreshing
+      setSyncing(true)
+      toast.loading('Syncing blockchain record...')
+      await new Promise((r) => setTimeout(r, 2000))
+
+      // ✅ Now safely refresh the table
+      onActionDone()
+      setSyncing(false)
+      toast.dismiss()
+      toast.success('✅ Certificate synced successfully!')
     } catch (err: any) {
-      toast.error(err.message)
+      toast.dismiss()
+      console.error('💥 Mint error:', err)
+      toast.error(err.message || 'Minting failed.')
     } finally {
       setMinting(false)
+      setSyncing(false)
     }
   }
 
-  // 🧩 Reusable button
+  // 🧩 Reusable Button
   const ActionButton = ({
     label,
     color,
@@ -111,15 +153,18 @@ export default function CertificateActions({ certificate, onActionDone }: Props)
       disabled={disabled}
       className={`flex items-center gap-1 px-3 py-1 rounded-md text-xs font-semibold border transition-colors ${color} disabled:opacity-60 disabled:cursor-not-allowed`}
     >
-      <Icon size={14} /> {label}
+      {disabled ? <Loader2 size={14} className="animate-spin" /> : <Icon size={14} />}
+      {label}
     </button>
   )
+
+  const normalizedStatus = certificate.status?.toUpperCase()
 
   return (
     <>
       <div className="flex flex-wrap gap-2">
         {/* ✅ Verify */}
-        {certificate.status !== 'VERIFIED' && (
+        {normalizedStatus !== 'VERIFIED' && (
           <ActionButton
             label="Verify"
             color="bg-green-100 text-green-700 hover:bg-green-200 border-green-300"
@@ -127,12 +172,12 @@ export default function CertificateActions({ certificate, onActionDone }: Props)
             onClick={() =>
               setConfirmAction({ type: 'VERIFY', title: 'Verify this certificate?' })
             }
-            disabled={loading || minting}
+            disabled={loading || minting || syncing}
           />
         )}
 
         {/* 🔴 Revoke */}
-        {certificate.status !== 'REVOKED' && (
+        {normalizedStatus !== 'REVOKED' && (
           <ActionButton
             label="Revoke"
             color="bg-red-100 text-red-700 hover:bg-red-200 border-red-300"
@@ -140,12 +185,12 @@ export default function CertificateActions({ certificate, onActionDone }: Props)
             onClick={() =>
               setConfirmAction({ type: 'REVOKE', title: 'Revoke this certificate?' })
             }
-            disabled={loading || minting}
+            disabled={loading || minting || syncing}
           />
         )}
 
         {/* 🔄 Restore */}
-        {certificate.status === 'REVOKED' && (
+        {normalizedStatus === 'REVOKED' && (
           <ActionButton
             label="Restore"
             color="bg-yellow-100 text-yellow-700 hover:bg-yellow-200 border-yellow-300"
@@ -156,18 +201,18 @@ export default function CertificateActions({ certificate, onActionDone }: Props)
                 title: 'Restore this certificate to pending?',
               })
             }
-            disabled={loading || minting}
+            disabled={loading || minting || syncing}
           />
         )}
 
         {/* 🪙 Mint on Blockchain */}
-        {certificate.status === 'VERIFIED' && (
+        {normalizedStatus === 'VERIFIED' && (
           <ActionButton
-            label={minting ? 'Minting...' : 'Mint on Blockchain'}
+            label={minting ? 'Minting...' : syncing ? 'Syncing...' : 'Mint on Blockchain'}
             color="bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-300"
             icon={Coins}
             onClick={handleMint}
-            disabled={minting || loading}
+            disabled={minting || syncing || loading}
           />
         )}
       </div>

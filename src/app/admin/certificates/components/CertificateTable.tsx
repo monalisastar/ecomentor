@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, ExternalLink } from 'lucide-react'
 import Image from 'next/image'
 import { toast } from 'sonner'
 import CertificateStatusBadge from './CertificateStatusBadge'
@@ -25,15 +25,19 @@ interface Props {
 export default function CertificateTable({ filter }: Props) {
   const [certificates, setCertificates] = useState<Certificate[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
 
-  // 🧠 Fetch certificates
+  // 🧠 Fetch certificates (always fresh)
   const fetchCertificates = async () => {
     try {
-      setLoading(true)
-      const res = await fetch('/api/admin/certificates', { cache: 'no-store' })
-      if (!res.ok) throw new Error('Failed to fetch certificates')
+      if (!refreshing) setLoading(true)
+      const res = await fetch(`/api/admin/certificates?t=${Date.now()}`, {
+        cache: 'no-store',
+      })
 
+      if (!res.ok) throw new Error('Failed to fetch certificates')
       const data = await res.json()
+
       const filtered =
         filter === 'ALL' ? data : data.filter((c: Certificate) => c.status === filter)
       setCertificates(filtered)
@@ -41,12 +45,22 @@ export default function CertificateTable({ filter }: Props) {
       toast.error(err.message)
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }
 
   useEffect(() => {
     fetchCertificates()
   }, [filter])
+
+  // 🌐 Get Polygonscan link
+  const getExplorerLink = (tx: string, network?: string | null) => {
+    const base =
+      network === 'polygon-amoy'
+        ? 'https://amoy.polygonscan.com/tx/'
+        : 'https://polygonscan.com/tx/'
+    return `${base}${tx}`
+  }
 
   // ⏳ Loading
   if (loading) {
@@ -57,22 +71,13 @@ export default function CertificateTable({ filter }: Props) {
     )
   }
 
-  // 📭 Empty
+  // 📭 Empty view
   if (certificates.length === 0) {
     return (
       <div className="text-center text-gray-500 italic py-10">
         No {filter === 'ALL' ? 'certificates' : filter.toLowerCase()} found.
       </div>
     )
-  }
-
-  // 🌐 Helper for Polygonscan link
-  const getExplorerLink = (tx: string, network?: string | null) => {
-    const base =
-      network === 'polygon-amoy'
-        ? 'https://amoy.polygonscan.com/tx/'
-        : 'https://polygonscan.com/tx/'
-    return `${base}${tx}`
   }
 
   return (
@@ -102,35 +107,47 @@ export default function CertificateTable({ filter }: Props) {
                 <CertificateStatusBadge status={c.status} />
               </td>
 
-              {/* 🪙 Blockchain info column */}
+              {/* 🪙 Blockchain Info */}
               <td className="px-4 py-3 text-sm">
                 {c.status === 'VERIFIED' && c.blockchainTx ? (
-                  <a
-                    href={getExplorerLink(c.blockchainTx, c.blockchainNetwork)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-green-700 hover:text-green-900 font-medium"
-                  >
+                  <div className="inline-flex items-center gap-2 bg-green-100 text-green-700 px-2 py-1 rounded-md border border-green-300 text-xs font-medium">
+                    {/* ✅ Directly using your local Polygon logo */}
                     <Image
                       src="/images/polygon-logo.svg"
-                      alt="Polygon"
+                      alt="Polygon Blockchain"
                       width={16}
                       height={16}
                       className="rounded-sm"
+                      priority
                     />
-                    <span className="text-xs">View on Blockchain</span>
-                  </a>
+                    <a
+                      href={getExplorerLink(c.blockchainTx, c.blockchainNetwork)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:text-green-900 flex items-center gap-1"
+                    >
+                      Minted <ExternalLink size={11} />
+                    </a>
+                  </div>
+                ) : c.status === 'VERIFIED' ? (
+                  <div className="inline-flex items-center gap-2 bg-yellow-100 text-yellow-700 px-2 py-1 rounded-md border border-yellow-300 text-xs font-medium animate-pulse">
+                    <Loader2 size={12} className="animate-spin" />
+                    Awaiting on-chain record
+                  </div>
                 ) : (
-                  <span className="text-gray-400 italic text-xs">
-                    {c.status === 'VERIFIED'
-                      ? 'Awaiting blockchain record...'
-                      : '—'}
-                  </span>
+                  <span className="text-gray-400 italic text-xs">—</span>
                 )}
               </td>
 
+              {/* ⚙️ Actions */}
               <td className="px-4 py-3">
-                <CertificateActions certificate={c} onActionDone={fetchCertificates} />
+                <CertificateActions
+                  certificate={c}
+                  onActionDone={() => {
+                    setRefreshing(true)
+                    fetchCertificates()
+                  }}
+                />
               </td>
             </tr>
           ))}

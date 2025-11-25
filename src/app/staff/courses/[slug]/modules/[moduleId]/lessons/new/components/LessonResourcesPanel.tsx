@@ -35,10 +35,12 @@ export default function LessonResourcesPanel({
         </label>
 
         <UploadPanel
+          fileType="video"                // ✅ Added this line
           fixedContext="lesson-videos"
-          onUploaded={(url) => {
-            if (typeof url === 'string') {
-              setFormData((prev) => ({ ...prev, videoUrl: url }))
+          onUploaded={(files) => {
+            const first = files?.[0]?.url
+            if (first) {
+              setFormData((prev) => ({ ...prev, videoUrl: first }))
               toast.success('🎥 Video uploaded successfully!')
             }
           }}
@@ -63,10 +65,12 @@ export default function LessonResourcesPanel({
         </label>
 
         <UploadPanel
+          fileType="document"             // ✅ Added this line
           fixedContext="lesson-documents"
-          onUploaded={(url) => {
-            if (typeof url === 'string') {
-              setFormData((prev) => ({ ...prev, fileUrl: url }))
+          onUploaded={(files) => {
+            const first = files?.[0]?.url
+            if (first) {
+              setFormData((prev) => ({ ...prev, fileUrl: first }))
               toast.success('📄 Document uploaded successfully!')
             }
           }}

@@ -4,19 +4,22 @@ import { useSession } from 'next-auth/react';
 import useSWR from 'swr';
 import { api } from '@/lib/api';
 
+// 🧩 Components
 import GreetingSection from './components/GreetingSection';
 import SearchBar from './components/SearchBar';
 import CategoryChips from './components/CategoryChips';
 import ContinueLearning from './components/ContinueLearning';
 import PopularCertificates from './components/PopularCertificates';
+import LearningInsights from './components/LearningInsights';
+import RecommendedCourses from './components/RecommendedCourses';
 
-// 🧩 Reusable fetcher for SWR
+// 🧩 SWR fetcher
 const fetcher = (url: string) => api.get(url);
 
 export default function StudentDashboard() {
   const { data: session } = useSession();
 
-  // 🧠 Fetch dashboard data with SWR (auto caching + background refresh)
+  // 🧠 Fetch main overview
   const {
     data: overview,
     error: overviewError,
@@ -26,6 +29,7 @@ export default function StudentDashboard() {
     shouldRetryOnError: false,
   });
 
+  // 🧠 Fetch certificates
   const {
     data: certificates,
     error: certsError,
@@ -35,26 +39,27 @@ export default function StudentDashboard() {
     shouldRetryOnError: false,
   });
 
-  // 🧩 Derived state
+  // 🧩 State helpers
   const loading = overviewLoading || certsLoading;
   const error = overviewError || certsError;
   const summary = overview?.summary || {};
   const certList = certificates || [];
 
-  // 🧍‍♂️ User first name
   const name = session?.user?.name?.split(' ')[0] || 'Learner';
 
-  // ❌ Error Fallback (layout still visible)
+  // ❌ Error Fallback
   if (error) {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center text-center text-gray-600">
-        <p className="text-lg font-semibold mb-3">Failed to load your dashboard data.</p>
+        <p className="text-lg font-semibold mb-3">
+          Failed to load your dashboard data.
+        </p>
         <p className="text-sm">Please refresh the page or try again later.</p>
       </main>
     );
   }
 
-  // ✅ Always render layout (instant skeletons)
+  // ✅ Dashboard Layout
   return (
     <main className="min-h-screen bg-gray-50 text-gray-800">
       <div className="max-w-7xl mx-auto px-6 py-10 space-y-12">
@@ -92,6 +97,16 @@ export default function StudentDashboard() {
           ) : (
             <CategoryChips />
           )}
+        </section>
+
+        {/* 💡 Recommended Courses — moved above Insights */}
+        <section>
+          <RecommendedCourses />
+        </section>
+
+        {/* 📈 Learning Insights */}
+        <section>
+          <LearningInsights />
         </section>
 
         {/* ▶️ Continue Learning */}

@@ -12,33 +12,47 @@ const seededRoleOverrides: Record<string, "admin" | "staff"> = {
   "virginia@ecomentor.green": "staff",
 };
 
+// ✅ Define which routes require authentication
 export const config = {
   matcher: ["/student/:path*", "/staff/:path*", "/admin/:path*"],
 };
 
+// 🧠 Main Middleware Logic
 export default withAuth(
   function middleware(req: NextRequest & { nextauth: { token: any } }) {
     const token = req.nextauth.token;
     const { pathname } = req.nextUrl;
 
-    // 🚫 No session token → redirect to login
+    // 🚫 Exclude NextAuth API & login routes from auth enforcement
+    if (pathname.startsWith("/api/auth") || pathname.startsWith("/login")) {
+      return NextResponse.next();
+    }
+
+    // ⚙️ Handle missing token (unauthenticated)
     if (!token) {
+      // 🩵 Grace period: allow dashboard redirect immediately after login
+      if (pathname.startsWith("/student/dashboard")) {
+        console.warn(`⚠️ Grace period → allowing first dashboard load while token initializes`);
+        return NextResponse.next();
+      }
+
       const loginUrl = new URL("/login", req.url);
       loginUrl.searchParams.set("callbackUrl", pathname);
-      console.warn(`🚫 No token found. Redirecting to login from ${pathname}`);
+      console.warn(`🚫 No token found → redirecting to login from ${pathname}`);
       return NextResponse.redirect(loginUrl);
     }
 
+    // 🔑 Extract user email & role
     const email = (token.email as string | undefined)?.toLowerCase();
     const tokenRoles = (token.roles as string[] | undefined) ?? ["student"];
     let role = tokenRoles[0] || "student";
 
-    // 🧩 Force seeded roles to override anything else
+    // 🧩 Apply seeded role overrides
     if (email && seededRoleOverrides[email]) {
       role = seededRoleOverrides[email];
     }
 
-    // 🚀 Auto-dashboard redirect if someone visits base paths
+    // 🚀 Auto-redirect to correct dashboard when visiting base path
     if (["/student", "/staff", "/admin"].includes(pathname)) {
       if (role === "admin")
         return NextResponse.redirect(new URL("/admin/dashboard", req.url));
@@ -47,38 +61,29 @@ export default withAuth(
       return NextResponse.redirect(new URL("/student/dashboard", req.url));
     }
 
-    // 🛡 Force admins to admin dashboard (even if they try /student)
-    if (role === "admin" && pathname.startsWith("/student")) {
-      console.warn(`⚠️ Admin ${email} attempted to access student area → redirecting to /admin/dashboard`);
-      return NextResponse.redirect(new URL("/admin/dashboard", req.url));
-    }
-    if (role === "admin" && pathname.startsWith("/staff")) {
-      console.warn(`⚠️ Admin ${email} attempted to access staff area → redirecting to /admin/dashboard`);
-      return NextResponse.redirect(new URL("/admin/dashboard", req.url));
-    }
-
-    // 🚫 Access restrictions
+    // 🧱 Restrict cross-area access
     if (pathname.startsWith("/admin") && role !== "admin") {
-      console.warn(`🚫 ${email} (${role}) tried to access admin area.`);
+      console.warn(`🚫 ${email} (${role}) tried to access admin area`);
       return NextResponse.redirect(new URL("/login", req.url));
     }
 
     if (pathname.startsWith("/staff") && !["staff", "admin"].includes(role)) {
-      console.warn(`🚫 ${email} (${role}) tried to access staff area.`);
+      console.warn(`🚫 ${email} (${role}) tried to access staff area`);
       return NextResponse.redirect(new URL("/login", req.url));
     }
 
     if (pathname.startsWith("/student") && !["student", "staff", "admin"].includes(role)) {
-      console.warn(`🚫 ${email} (${role}) tried to access student area.`);
+      console.warn(`🚫 ${email} (${role}) tried to access student area`);
       return NextResponse.redirect(new URL("/login", req.url));
     }
 
-    console.log(`✅ Access granted: ${email} (${role}) → ${pathname}`);
+    // ✅ Allow access if all checks pass
+    console.log(`✅ Access granted → ${email} (${role}) → ${pathname}`);
     return NextResponse.next();
   },
   {
     callbacks: {
-      authorized: ({ token }) => !!token,
+      authorized: ({ token }) => !!token, // Let middleware logic handle the rest
     },
   }
 );

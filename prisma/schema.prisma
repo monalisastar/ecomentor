@@ -95,9 +95,11 @@ model User {
   reviews           Review[]
   announcements     Announcement[]
   certificateDesign CertificateDesign?
-  status String @default("INVITED") // ACTIVE | INVITED | SUSPENDED
-
+  status            String             @default("INVITED") // ACTIVE | INVITED | SUSPENDED
+    // 🆕 Back-relation for quiz attempts
+  quizAttempts      QuizAttempt[]
 }
+// 
 
 //
 // ✅ Certificate Design (Staff Custom Layouts)
@@ -165,7 +167,7 @@ model Course {
   description String?
   image       String?
 
-  category    String? // instead of enum
+  category    String?
   scope       GHGScope?
   methodology String?
   standard    String?
@@ -196,20 +198,23 @@ model Course {
   payments      Payment[]
   reviews       Review[]
   announcements Announcement[]
-  quizzes       Quiz[] // ✅ Added this line
+  quizzes       Quiz[]
   prerequisites CoursePrerequisite[] @relation("CourseToPrerequisites")
   dependentOn   CoursePrerequisite[] @relation("CourseToDependents")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  adminStatus String   @default("APPROVED")
+  adminNote   String?
 
+  // ⚙️ Keep only truly useful indexes
   @@index([category])
   @@index([instructorId])
-    adminStatus String    @default("APPROVED") // APPROVED, UNDER_REVIEW, or REVOKED
-    adminNote String?  // for private admin comments
-
-
+  @@index([category, instructorId])
+  @@index([published])
 }
+
+
 
 //
 // ✅ Many-to-Many Prerequisites
@@ -230,12 +235,11 @@ model CoursePrerequisite {
 
 //
 // ✅ Course Content Hierarchy
-//
 model Module {
   id          String   @id @default(cuid()) @map("_id")
   title       String
   slug        String   @unique
-  objectives  String? // 👈 Add this
+  objectives  String?
   order       Int?
   description String?
   courseId    String
@@ -244,30 +248,52 @@ model Module {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-
-  @@index([courseId])
+  // ⚙️ Keep only needed indexes
+  @@index([courseId, order])   // compound for ordering within a course
 }
+
 
 model Lesson {
-  id          String       @id @default(cuid()) @map("_id")
-  title       String
-  slug        String       @unique
-  description String?
-  order       Int?
-  duration    String?
-  contentType String?
-  textContent String?
-  fileUrl     String?
-  fileType    String?
-  videoUrl    String?
-  moduleId    String
-  module      Module       @relation(fields: [moduleId], references: [id], onDelete: Cascade)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  quizzes     LessonQuiz[] // back relation
+  id            String       @id @default(cuid()) @map("_id")
+  title         String
+  slug          String       @unique
+  description   String?
+  order         Int?
+  duration      String?
+  contentType   String?
+  textContent   String?
 
-  @@index([moduleId])
+  // 📄 Document (PDF, Word, etc.)
+  fileUrl       String?
+  fileType      String?
+  fileName      String?      // original file name
+  fileSize      String?      // e.g. "2.3 MB"
+  fileUploaded  String?      // human-readable timestamp
+
+  // 🎥 Video upload
+  videoUrl      String?
+  videoName     String?
+  videoSize     String?
+  videoUploaded String?
+
+  // 👤 Audit metadata
+  updatedBy     String?      // name or email of last editor
+
+  // 🔗 Relations
+  moduleId      String
+  module        Module       @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  quizzes       LessonQuiz[]
+  quizAttempts  QuizAttempt[]
+
+  // 🕓 System fields
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  // ⚙️ Optimized Indexes
+  @@index([moduleId, order])   // 🔥 Compound for fast module lesson ordering
+  @@index([title])             // For search/filter in dashboards
 }
+
 
 //
 // ✅ Lesson-Specific Quizzes (Per-Lesson Quiz System)
@@ -284,8 +310,10 @@ model LessonQuiz {
   correct   String
   createdAt DateTime @default(now())
 
+  // ⚙️ Optimized Index
   @@index([lessonId])
 }
+
 
 //
 // ✅ Enrollment & Progress
@@ -298,23 +326,31 @@ model Enrollment {
   completed     Boolean  @default(false)
   enrolledAt    DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  paymentStatus String?
-  paymentMethod String?
+
+  // 💳 Payment Info
+  paymentStatus String?  // e.g. "PAID", "PENDING", "FAILED"
+  paymentMethod String?  // e.g. "MPESA", "CARD", "CRYPTO"
   paymentRef    String?
   amountPaid    Float?
 
-  user    User      @relation(fields: [userId], references: [id])
-  course  Course    @relation(fields: [courseId], references: [id])
-  payment Payment[]
+  // 🔗 Relations
+  user          User       @relation(fields: [userId], references: [id])
+  course        Course     @relation(fields: [courseId], references: [id])
+  payment       Payment[]
+  certificates  Certificate[]   // 👈 Added back-relation to Certificate
 
-  @@unique([userId, courseId])
-  @@index([userId])
-  @@index([courseId])
+  // ⚙️ Indexes & Constraints
+  @@unique([userId, courseId])        // One enrollment per course per user
+  @@index([userId])                   // Fast student lookup
+  @@index([courseId])                 // Fast course lookup
+  @@index([courseId, userId])         // Instructor dashboards
+  @@index([completed])                // Quick filtering for completion stats
+  @@index([paymentStatus])            // Fast payment reconciliation
 }
+
 
 //
 // ✅ Certificates
-//
 model Certificate {
   id              String            @id @default(cuid()) @map("_id")
   studentId       String
@@ -323,6 +359,7 @@ model Certificate {
   courseTitle     String
   certificateUrl  String?
   qrCodeUrl       String?
+  previewUrl      String?  
   verificationUrl String
   verificationId  String            @unique
   issueDate       DateTime          @default(now())
@@ -333,21 +370,25 @@ model Certificate {
   language        String?           @default("en")
   durationHours   Float?
   status          CertificateStatus @default(PENDING)
+  metadataURI     String?           // Supabase-hosted metadata JSON URL
 
-  user      User?    @relation(fields: [studentId], references: [id])
+  // 🧩 Relations
+  user          User?        @relation(fields: [studentId], references: [id])
+  enrollmentId  String?      // 👈 now properly placed
+  enrollment    Enrollment?  @relation(fields: [enrollmentId], references: [id])
+
+  // 🪙 Blockchain tracking
+  blockchainTx       String? // transaction hash
+  blockchainContract String? // contract address
+  blockchainNetwork  String? // e.g. "polygon-amoy"
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // ✅ Indexes and constraints
   @@index([studentId])
   @@index([courseSlug])
-
-    // 🪙 Blockchain tracking
-  blockchainTx       String?   // transaction hash
-  blockchainContract String?   // contract address
-  blockchainNetwork  String?   // e.g. "polygon-amoy"
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@unique([studentId, courseSlug]) // one certificate per course per student
 }
 
 //
@@ -383,7 +424,7 @@ model Payment {
 }
 
 //
-// ✅ Lesson Progress Tracking
+//  Lesson Progress Tracking
 //
 model ProgressRecord {
   id          String   @id @default(cuid()) @map("_id")
@@ -392,14 +433,26 @@ model ProgressRecord {
   lessonId    String
   completedAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id])
+  // 🧠 Progress metadata
+  score       Float?    // e.g. 80%
+  isPassed    Boolean?  @default(false)
 
-  @@unique([userId, lessonId])
-  @@index([courseId])
+  // 🔗 Relations
+  user   User   @relation(fields: [userId], references: [id])
+  // optional future relation:
+  // lesson Lesson @relation(fields: [lessonId], references: [id])
+
+  // ⚙️ Optimized Indexes
+  @@unique([userId, lessonId])       // Prevents duplicate records per lesson per user
+  @@index([courseId])                // Quick filtering by course
+  @@index([userId])                  // Fast user-based progress lookup
+  @@index([courseId, userId])        // 🔥 Compound for course progress dashboards
+  @@index([isPassed])                // Quick filtering for pass/fail analytics
 }
 
+
 //
-// ✅ Course Reviews
+// Course Reviews
 //
 model Review {
   id        String   @id @default(cuid()) @map("_id")
@@ -459,16 +512,117 @@ model Question {
   points  Int?         @default(1)
 
   quiz Quiz @relation(fields: [quizId], references: [id])
-
-
 }
-  model StaffTask {
-  id          String   @id @default(cuid()) @map("_id")
+model QuizAttempt {
+  id         String   @id @default(cuid()) @map("_id")
+  userId     String
+  lessonId   String
+  courseId   String
+  score      Float?
+  isPassed   Boolean  @default(false)
+  attemptNo  Int      @default(1)
+  createdAt  DateTime @default(now())
+
+  // Optional cooldown management (for staff audit)
+  lockedUntil DateTime?
+
+  // 🔗 Relations
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([lessonId])
+  @@index([courseId])
+}
+model StaffTask {
+  id          String    @id @default(cuid()) @map("_id")
   title       String
   description String?
   courseSlug  String?
   dueDate     DateTime?
-  isCompleted Boolean  @default(false)
-  createdAt   DateTime @default(now())
-    assignedTo  String?   // 👈 FK
+  isCompleted Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  assignedTo  String? // 👈 FK
+}
+
+//
+// ✅ Unified Admin Settings
+//
+model AdminSettings {
+  id String @id @default(cuid()) @map("_id")
+
+  // 🌐 General & Branding
+  platformName      String?
+  supportEmail      String?
+  primaryBrandColor String? @default("#1B5E20")
+  defaultLanguage   String? @default("English")
+
+  // 🪶 Certificate Defaults
+  issuerName         String? @default("Eco-Mentor Climate LMS")
+  verifiedByDefault  String? @default("Eco-Mentor Verification Team")
+  certificateLogoUrl String?
+  signatureImageUrl  String?
+  backgroundImageUrl String?
+  accentColor        String? @default("#1B5E20")
+
+  // ⚙️ System Controls
+  maintenanceMode       Boolean @default(false)
+  enrollmentLock        Boolean @default(false)
+  weeklyReportsToAdmins Boolean @default(false)
+  enableDebugLogging    Boolean @default(false)
+
+  // 🧾 Certificates & Communication
+  autoVerifyCertificates Boolean @default(false)
+  emailNotifications     Boolean @default(true)
+
+  // 🪙 Blockchain Automation
+  blockchainMintingEnabled  Boolean @default(false)
+  blockchainNetworkDefault  String? // e.g. "polygon-amoy"
+  blockchainContractDefault String? // default smart contract address
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Page {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  title      String
+  slug       String   @unique
+  content    String?
+  sections   Json?
+  coverImage String?
+  type       String   @default("PAGE")
+  status     String   @default("PUBLISHED")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  showInMenu Boolean  @default(false)
+  menuLabel  String?
+
+  // ✅ relation to PageSection
+  sectionsList PageSection[]
+}
+
+model PageSection {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  pageId String @db.ObjectId
+  page   Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  sectionKey String
+  content    String?
+  imageUrl   String?
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+
+  @@unique([pageId, sectionKey])
+}
+
+model BlogPost {
+  id        String   @id @default(cuid()) @map("_id")
+  title     String
+  slug      String   @unique
+  content   String
+  author    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  published Boolean  @default(false)
 }

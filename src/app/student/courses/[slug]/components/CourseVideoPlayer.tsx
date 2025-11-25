@@ -12,17 +12,19 @@ interface Lesson {
 
 interface CourseVideoPlayerProps {
   lesson: Lesson | null
-  onLessonComplete?: (lessonId: string) => void // ✅ optional completion callback
+  onLessonComplete?: (lessonId: string) => void
+  onVideoEnded?: () => void // ✅ used to trigger quiz reveal
 }
 
 export default function CourseVideoPlayer({
   lesson,
   onLessonComplete,
+  onVideoEnded,
 }: CourseVideoPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [hasCompleted, setHasCompleted] = useState(false)
 
-  // 🧠 Reset completion state when switching lessons
+  // 🔁 Reset when switching lessons
   useEffect(() => {
     setHasCompleted(false)
     setIsPlaying(false)
@@ -42,7 +44,7 @@ export default function CourseVideoPlayer({
       <div className="relative w-full h-[400px] bg-black rounded-t-xl overflow-hidden">
         {lesson.videoUrl ? (
           <video
-            key={lesson.id} // ensures video resets when lesson changes
+            key={lesson.id} // ensures reset when lesson changes
             src={lesson.videoUrl}
             controls
             className="w-full h-full object-cover"
@@ -51,7 +53,8 @@ export default function CourseVideoPlayer({
             onEnded={() => {
               if (!hasCompleted) {
                 setHasCompleted(true)
-                onLessonComplete?.(lesson.id) // ✅ notify parent (CourseDetailPage)
+                onLessonComplete?.(lesson.id)
+                onVideoEnded?.() // ✅ notify parent to show quiz
               }
             }}
           />
@@ -63,12 +66,9 @@ export default function CourseVideoPlayer({
         )}
       </div>
 
-      {/* 📘 Lesson Info */}
-      <div className="p-6 space-y-4">
+      {/* 🏷️ Lesson Title Only (removed duplicate description) */}
+      <div className="p-6">
         <h2 className="text-2xl font-semibold text-gray-900">{lesson.title}</h2>
-        <p className="text-gray-600 leading-relaxed">
-          {lesson.description || 'No description provided for this lesson yet.'}
-        </p>
       </div>
     </div>
   )

@@ -1,25 +1,34 @@
-'use client'
+'use client';
 
-import { useEffect, useState } from "react";;
-import Link from "next/link";;
-import Image from "next/image";;
-import { ArrowRight } from "lucide-react";;
-import { courseData } from "@/data/courseData";;
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import { ArrowRight } from "lucide-react";
+import { courseData } from "@/data/courseData";
 
-const ROTATE_INTERVAL = 5000
-const CARDS_PER_VIEW = 3
+// 🧩 Static data for CMS integration
+export const staticData = {
+  p_1: "Learn at your own pace with real-world examples, projects, and mentorship — designed to prepare you for the green economy.",
+};
 
-export default function CoursePreview() {
-  const [index, setIndex] = useState(0)
+const ROTATE_INTERVAL = 5000;
+const CARDS_PER_VIEW = 3;
+
+// ✅ Allow external CMS props to override static defaults
+type CoursePreviewProps = Partial<typeof staticData>;
+
+export default function CoursePreview(props: CoursePreviewProps = {}) {
+  const data = { ...staticData, ...props };
+  const [index, setIndex] = useState(0);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setIndex(prev => (prev + CARDS_PER_VIEW) % courseData.length)
-    }, ROTATE_INTERVAL)
-    return () => clearInterval(interval)
-  }, [])
+      setIndex((prev) => (prev + CARDS_PER_VIEW) % courseData.length);
+    }, ROTATE_INTERVAL);
+    return () => clearInterval(interval);
+  }, []);
 
-  const visibleCourses = courseData.slice(index, index + CARDS_PER_VIEW)
+  const visibleCourses = courseData.slice(index, index + CARDS_PER_VIEW);
 
   return (
     <section className="bg-[#f9fbff] text-gray-900 py-20 px-6 md:px-12">
@@ -45,7 +54,7 @@ export default function CoursePreview() {
                     <h3 className="text-xl font-semibold mb-2 group-hover:text-green-600 transition">
                       {course.title}
                     </h3>
-                    <p className="text-sm text-gray-600">{course.description}</p>
+                    <p className="text-sm text-gray-600">{data.p_1}</p>
                   </div>
                 </div>
               </Link>
@@ -60,6 +69,5 @@ export default function CoursePreview() {
         </Link>
       </div>
     </section>
-  )
+  );
 }
-

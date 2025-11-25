@@ -1,4 +1,16 @@
+
+
+
 'use client'
+// 🧩 Auto-generated static data for CMS
+export const staticData = {
+  "p_1": "Browse popular queries or search below to find instant answers.",
+  "p_2": "{answer}",
+  "p_3": "Still need help?",
+  "button_4": "Ask Our AI Assistant",
+  "button_5": "🤖 Help"
+};
+
 
 import { useState } from "react";;
 import { motion, AnimatePresence } from "framer-motion";;
@@ -101,9 +113,7 @@ export default function FAQPage() {
         {/* Title */}
         <div className="text-center space-y-4">
           <h1 className="text-4xl md:text-5xl font-bold">Frequently Asked Questions</h1>
-          <p className="text-gray-300 max-w-2xl mx-auto">
-            Browse popular queries or search below to find instant answers.
-          </p>
+          <p className="text-gray-300 max-w-2xl mx-auto">{"{staticData.p_1}"}</p>
         </div>
 
         {/* Search */}
@@ -141,7 +151,7 @@ export default function FAQPage() {
                         exit={{ height: 0, opacity: 0 }}
                         className="overflow-hidden text-gray-300 mt-2"
                       >
-                        <p>{answer}</p>
+                        <p>{"{staticData.p_2}"}</p>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -153,20 +163,16 @@ export default function FAQPage() {
 
         {/* Support Button */}
         <div className="text-center pt-16">
-          <p className="text-gray-300 mb-4">Still need help?</p>
+          <p className="text-gray-300 mb-4">{"{staticData.p_3}"}</p>
           <Link href="/bot">
-            <button className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-full font-semibold transition">
-              Ask Our AI Assistant
-            </button>
+            <button className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-full font-semibold transition">{"{staticData.button_4}"}</button>
           </Link>
         </div>
       </section>
 
       {/* Floating Help Bot Button */}
       <Link href="/bot">
-        <button className="fixed bottom-6 right-6 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-full z-50 shadow-lg">
-          🤖 Help
-        </button>
+        <button className="fixed bottom-6 right-6 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-full z-50 shadow-lg">{"{staticData.button_5}"}</button>
       </Link>
     </main>
   )

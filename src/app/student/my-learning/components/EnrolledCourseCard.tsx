@@ -2,6 +2,7 @@
 
 import { PlayCircle, Award } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image'
 
 type EnrolledCourseCardProps = {
   course: {
@@ -16,14 +17,24 @@ type EnrolledCourseCardProps = {
 }
 
 export default function EnrolledCourseCard({ course }: EnrolledCourseCardProps) {
+  // 🧠 Build a universal Supabase-safe image URL
+  const imageUrl =
+    course.image && course.image.startsWith('http')
+      ? course.image
+      : course.image
+      ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${course.image}`
+      : '/images/default-course.jpg'
+
   return (
     <div className="bg-white border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-all transform hover:-translate-y-1.5 overflow-hidden flex flex-col">
       {/* 🎞 Thumbnail */}
-      <div className="relative group">
-        <img
-          src={course.image || '/images/default-course.jpg'}
+      <div className="relative group w-full h-44">
+        <Image
+          src={imageUrl}
           alt={course.title}
-          className="w-full h-44 object-cover transition-transform duration-500 group-hover:scale-105"
+          fill
+          unoptimized
+          className="object-cover transition-transform duration-500 group-hover:scale-105"
         />
 
         {course.completed && (

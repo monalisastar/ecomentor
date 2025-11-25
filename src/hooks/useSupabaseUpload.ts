@@ -72,5 +72,25 @@ export function useSupabaseUpload() {
     }
   }
 
-  return { uploadFile, progress, error, fileUrl }
+  /**
+   * 🗑️ Securely deletes a file from Supabase storage
+   * Requires backend endpoint `/api/delete-file` to perform deletion via Supabase admin API
+   * @param filePath File path (e.g. lessons/video.mp4)
+   */
+  const deleteFile = async (filePath: string) => {
+    try {
+      const res = await fetch('/api/delete-file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePath }),
+      })
+      if (!res.ok) throw new Error('Failed to delete file')
+      return { success: true }
+    } catch (err: any) {
+      console.error('🧨 Delete error:', err)
+      return { success: false, error: err.message || 'Delete failed.' }
+    }
+  }
+
+  return { uploadFile, deleteFile, progress, error, fileUrl }
 }

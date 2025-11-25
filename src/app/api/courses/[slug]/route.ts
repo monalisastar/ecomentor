@@ -1,13 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server"
 import prisma from "@/lib/prisma"
 import { getToken } from "next-auth/jwt"
+import slugify from "slugify"
 
+/**
+ * 📘 GET /api/courses/[slug]
+ * ---------------------------------------------------------
+ * Fetch a single course by slug
+ * Staff, lecturer, or admin can view unpublished courses.
+ */
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<{ slug: string }> } // 👈 fix
+  context: { params: Promise<{ slug: string }> }
 ) {
   try {
-    const { slug } = await context.params // 👈 must await
+    const { slug } = await context.params
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
 
     const user = token?.email
@@ -17,11 +24,13 @@ export async function GET(
         })
       : null
 
-    const isStaff = user?.roles?.some((r) => ["lecturer", "admin"].includes(r)) ?? false
+    const allowedRoles = ["staff", "lecturer", "admin"]
+    const isStaff = user?.roles?.some((r) => allowedRoles.includes(r)) ?? false
 
     const course = await prisma.course.findUnique({
       where: { slug },
       include: {
+        instructor: { select: { id: true, email: true, name: true } },
         modules: {
           include: { lessons: true },
           orderBy: { order: "asc" },
@@ -42,28 +51,51 @@ export async function GET(
   }
 }
 
+/**
+ * ✏️ PATCH /api/courses/[slug]
+ * ---------------------------------------------------------
+ * Update an existing course by slug
+ * Allowed: Only instructor or admin
+ */
 export async function PATCH(
   req: NextRequest,
-  context: { params: Promise<{ slug: string }> } // 👈 fix
+  context: { params: Promise<{ slug: string }> }
 ) {
   try {
-    const { slug } = await context.params // 👈 must await
+    const { slug } = await context.params
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
     if (!token?.email)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+    // ✅ Get current user
     const user = await prisma.user.findUnique({
       where: { email: token.email },
-      select: { roles: true },
+      select: { id: true, roles: true },
     })
 
-    if (!user || !["lecturer", "admin"].some((r) => user.roles.includes(r)))
+    const allowedRoles = ["staff", "lecturer", "admin"]
+    const isAuthorized = user?.roles?.some((r) => allowedRoles.includes(r))
+    if (!isAuthorized)
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    const existing = await prisma.course.findUnique({ where: { slug } })
+    // ✅ Get existing course
+    const existing = await prisma.course.findUnique({
+      where: { slug },
+      select: { id: true, title: true, instructorId: true },
+    })
+
     if (!existing)
       return NextResponse.json({ error: "Course not found" }, { status: 404 })
 
+    // 🚫 Restrict edits to instructor or admin
+    const isAdmin = user?.roles?.includes("admin")
+    if (!isAdmin && existing.instructorId !== user?.id)
+      return NextResponse.json(
+        { error: "You are not allowed to edit this course." },
+        { status: 403 }
+      )
+
+    // ✅ Handle updates
     const body = await req.json()
     const data: any = {}
 
@@ -76,11 +108,7 @@ export async function PATCH(
     if (body.published !== undefined) data.published = body.published
 
     if (body.title && body.title !== existing.title) {
-      const slugify = (await import("slugify")).default
-      data.slug =
-        slugify(body.title, { lower: true, strict: true }) +
-        "-" +
-        Date.now().toString(36)
+      data.slug = `${slugify(body.title, { lower: true, strict: true })}-${Date.now().toString(36)}`
     }
 
     data.updatedAt = new Date()
@@ -98,30 +126,53 @@ export async function PATCH(
   }
 }
 
+/**
+ * 🗑 DELETE /api/courses/[slug]
+ * ---------------------------------------------------------
+ * Deletes a course and related data
+ * Allowed: Only instructor or admin
+ */
 export async function DELETE(
   req: NextRequest,
-  context: { params: Promise<{ slug: string }> } // 👈 fix
+  context: { params: Promise<{ slug: string }> }
 ) {
   try {
-    const { slug } = await context.params // 👈 must await
+    const { slug } = await context.params
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
     if (!token?.email)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+    // ✅ Get current user
     const user = await prisma.user.findUnique({
       where: { email: token.email },
-      select: { roles: true },
+      select: { id: true, roles: true },
     })
 
-    if (!user || !user.roles.includes("admin"))
+    const allowedRoles = ["staff", "lecturer", "admin"]
+    const isAuthorized = user?.roles?.some((r) => allowedRoles.includes(r))
+    if (!isAuthorized)
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    const course = await prisma.course.findUnique({ where: { slug } })
+    // ✅ Find course with instructorId
+    const course = await prisma.course.findUnique({
+      where: { slug },
+      select: { id: true, instructorId: true },
+    })
+
     if (!course)
       return NextResponse.json({ error: "Course not found" }, { status: 404 })
 
+    // 🚫 Restrict deletion (only instructor or admin)
+    const isAdmin = user?.roles?.includes("admin")
+    if (!isAdmin && course.instructorId !== user?.id)
+      return NextResponse.json(
+        { error: "You are not allowed to delete this course." },
+        { status: 403 }
+      )
+
     const courseId = course.id
 
+    // 🧹 Delete dependent records safely
     await prisma.$transaction([
       prisma.lesson.deleteMany({ where: { module: { courseId } } }),
       prisma.module.deleteMany({ where: { courseId } }),
@@ -131,7 +182,10 @@ export async function DELETE(
     ])
 
     console.log(`🗑️ Course deleted successfully: ${slug}`)
-    return NextResponse.json({ message: "Course deleted successfully" }, { status: 200 })
+    return NextResponse.json(
+      { message: "Course deleted successfully" },
+      { status: 200 }
+    )
   } catch (error: any) {
     console.error("❌ Error deleting course:", error)
     return NextResponse.json(

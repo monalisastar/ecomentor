@@ -40,8 +40,8 @@ export default function EnrollCoursePage() {
       setEnrolling(true)
 
       // 🚨 If not free → redirect to payments page
-      if (course.price && course.price > 0) {
-        router.push(`/student/payments?course=${slug}&amount=${course.price}`)
+      if (course.priceUSD && course.priceUSD > 0) {
+        router.push(`/student/payments?course=${slug}&amount=${course.priceUSD}`)
         return
       }
 
@@ -92,28 +92,74 @@ export default function EnrollCoursePage() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-6 py-12">
       <div className="max-w-3xl w-full bg-white shadow-md rounded-xl overflow-hidden">
+        {/* 🖼️ Course Banner */}
         <Image
           src={course.image || '/images/default-course.jpg'}
           alt={course.title}
           width={1200}
           height={500}
           className="w-full h-64 object-cover"
+          unoptimized
         />
 
         <div className="p-8 text-center">
+          {/* 🧭 Course Title & Description */}
           <h1 className="text-3xl font-semibold mb-3 text-gray-900">
             {course.title}
           </h1>
-          <p className="text-gray-600 mb-6">
+          <p className="text-gray-600 mb-6 leading-relaxed">
             {course.description || 'Course description coming soon.'}
           </p>
 
+          {/* 💰 Dynamic Price */}
           <p className="text-2xl font-semibold text-green-700 mb-8">
-            {course.price && course.price > 0
-              ? `KES ${course.price.toLocaleString()}`
+            {course.priceUSD && course.priceUSD > 0
+              ? `$${course.priceUSD.toLocaleString()}`
               : 'Free'}
           </p>
 
+          {/* 🧩 Detailed Info Blocks */}
+          <div className="text-left mb-8 space-y-6">
+            {course.whyTake && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">
+                  Why Take This Course?
+                </h3>
+                <p className="text-gray-600">{course.whyTake}</p>
+              </div>
+            )}
+
+            {course.objectives && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">
+                  Learning Objectives
+                </h3>
+                <p className="text-gray-600">{course.objectives}</p>
+              </div>
+            )}
+
+            {course.requirements && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">
+                  Requirements
+                </h3>
+                <p className="text-gray-600">{course.requirements}</p>
+              </div>
+            )}
+
+            {course.instructorNotes && (
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">
+                  Instructor’s Note
+                </h3>
+                <p className="text-gray-600 italic">
+                  {course.instructorNotes}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* 💳 CTA Button */}
           <button
             onClick={handleEnroll}
             disabled={enrolling}
@@ -125,7 +171,7 @@ export default function EnrollCoursePage() {
           >
             {enrolling
               ? 'Processing...'
-              : course.price && course.price > 0
+              : course.priceUSD && course.priceUSD > 0
               ? 'Proceed to Payment'
               : 'Enroll Now'}
           </button>

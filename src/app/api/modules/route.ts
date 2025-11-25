@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     }
 
     const roles = user.roles || ["student"]
-    if (!roles.includes("lecturer") && !roles.includes("admin")) {
+    if (!roles.includes("staff") && !roles.includes("admin")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 

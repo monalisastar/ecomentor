@@ -1,7 +1,9 @@
 'use client'
 
 import SettingCard from './SettingCard'
-import UploadPanel from '@/components/UploadPanel' // adjust import path to your actual location
+import UploadPanel, { UploadedFile } from '@/components/UploadPanel'
+import { Switch } from '@headlessui/react'
+import { motion } from 'framer-motion'
 
 interface Props {
   settings: any
@@ -11,11 +13,13 @@ interface Props {
 /**
  * 🪶 CertificateDefaultsPanel
  * ---------------------------------------------------------
- * Manages default values for certificate appearance:
- * issuer name, signature, logo, background, and color.
- * Uses UploadPanel for Supabase image uploads.
+ * Manages certificate appearance + automation settings:
+ * issuer, visuals, auto-verification, and blockchain minting.
  */
 export default function CertificateDefaultsPanel({ settings, setSettings }: Props) {
+  const handleToggle = (key: string) =>
+    setSettings({ ...settings, [key]: !settings[key] })
+
   return (
     <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
       {/* 🏛️ Issuer */}
@@ -48,7 +52,7 @@ export default function CertificateDefaultsPanel({ settings, setSettings }: Prop
         />
       </SettingCard>
 
-      {/* 🖼️ Certificate Logo */}
+      {/* 🖼️ Logo */}
       <SettingCard
         title="Certificate Logo"
         description="Displayed at the top of all certificates."
@@ -57,14 +61,15 @@ export default function CertificateDefaultsPanel({ settings, setSettings }: Prop
           fixedContext="certificate-assets"
           fileType="image"
           multiple={false}
-          initialUrls={settings.logoUrl ? [settings.logoUrl] : []}
-          onUploaded={(files) =>
-            setSettings({ ...settings, logoUrl: files[0]?.url })
+          fileUrl={settings.logoUrl || null}
+          onUploaded={(files: UploadedFile[], fileUrl?: string) =>
+            setSettings({ ...settings, logoUrl: fileUrl || files[0]?.url })
           }
+          onDelete={async () => setSettings({ ...settings, logoUrl: null })}
         />
       </SettingCard>
 
-      {/* ✍️ Signature Image */}
+      {/* ✍️ Signature */}
       <SettingCard
         title="Signature Image"
         description="Digital signature image for the bottom-right of certificates."
@@ -73,14 +78,15 @@ export default function CertificateDefaultsPanel({ settings, setSettings }: Prop
           fixedContext="certificate-signatures"
           fileType="image"
           multiple={false}
-          initialUrls={settings.signatureUrl ? [settings.signatureUrl] : []}
-          onUploaded={(files) =>
-            setSettings({ ...settings, signatureUrl: files[0]?.url })
+          fileUrl={settings.signatureUrl || null}
+          onUploaded={(files: UploadedFile[], fileUrl?: string) =>
+            setSettings({ ...settings, signatureUrl: fileUrl || files[0]?.url })
           }
+          onDelete={async () => setSettings({ ...settings, signatureUrl: null })}
         />
       </SettingCard>
 
-      {/* 🧱 Background Image */}
+      {/* 🧱 Background */}
       <SettingCard
         title="Background Image"
         description="Optional background or watermark for certificates."
@@ -89,10 +95,11 @@ export default function CertificateDefaultsPanel({ settings, setSettings }: Prop
           fixedContext="certificate-backgrounds"
           fileType="image"
           multiple={false}
-          initialUrls={settings.backgroundUrl ? [settings.backgroundUrl] : []}
-          onUploaded={(files) =>
-            setSettings({ ...settings, backgroundUrl: files[0]?.url })
+          fileUrl={settings.backgroundUrl || null}
+          onUploaded={(files: UploadedFile[], fileUrl?: string) =>
+            setSettings({ ...settings, backgroundUrl: fileUrl || files[0]?.url })
           }
+          onDelete={async () => setSettings({ ...settings, backgroundUrl: null })}
         />
       </SettingCard>
 
@@ -110,6 +117,59 @@ export default function CertificateDefaultsPanel({ settings, setSettings }: Prop
           className="h-10 w-16 rounded-md cursor-pointer border border-gray-200"
         />
       </SettingCard>
+
+      {/* ✅ Auto-Verify Certificates */}
+      <SettingCard
+        title="Auto-Verify Certificates"
+        description="Automatically mark new certificates as verified when issued."
+      >
+        <AnimatedToggle
+          enabled={settings.autoVerifyCertificates || false}
+          onChange={() => handleToggle('autoVerifyCertificates')}
+        />
+      </SettingCard>
+
+      {/* 🪙 Blockchain Minting */}
+      <SettingCard
+        title="Blockchain Minting"
+        description="Automatically mint verified certificates as NFTs on Polygon."
+      >
+        <AnimatedToggle
+          enabled={settings.blockchainMintingEnabled || false}
+          onChange={() => handleToggle('blockchainMintingEnabled')}
+        />
+      </SettingCard>
     </section>
+  )
+}
+
+/**
+ * 💡 AnimatedToggle
+ * ---------------------------------------------------------
+ * Reusable, animated toggle switch using Headless UI + Framer Motion.
+ */
+function AnimatedToggle({
+  enabled,
+  onChange,
+}: {
+  enabled: boolean
+  onChange: () => void
+}) {
+  return (
+    <Switch
+      checked={enabled}
+      onChange={onChange}
+      className={`${
+        enabled ? 'bg-green-600' : 'bg-gray-300'
+      } relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none`}
+    >
+      <span className="sr-only">Toggle setting</span>
+      <motion.span
+        className="inline-block h-4 w-4 transform rounded-full bg-white shadow transition"
+        layout
+        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+        animate={{ x: enabled ? 20 : 2 }}
+      />
+    </Switch>
   )
 }

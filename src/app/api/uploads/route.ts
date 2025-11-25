@@ -1,8 +1,7 @@
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 import { supabase } from "@/lib/supabase"
 import { randomUUID } from "crypto"
 import path from "path"
-import type { NextRequest } from "next/server"
 
 // ✅ Allow up to 25 MB per upload
 export const config = {
@@ -14,15 +13,10 @@ export const config = {
 }
 
 /**
- * 📤 POST /api/upload  — Eco-Mentor LMS
+ * 📤 POST /api/upload — Eco-Mentor LMS
  * ------------------------------------------------------------
  * Uploads course or lesson files directly to Supabase Storage.
- * Organized by file type:
- *  - Images → public-assets/courses
- *  - Lesson content → private-uploads/lessons
- *  - Reports/certificates → private-uploads/reports
- * 
- * 🧠 Uses streaming instead of full in-memory buffering.
+ * Uses streaming with browser-compatible ReadableStream readers.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -39,7 +33,7 @@ export async function POST(req: NextRequest) {
     const ext = path.extname(file.name) || ".dat"
     const fileName = `${randomUUID()}${ext}`
 
-    // 🧠 Context-based folder selection
+    // 🧩 Folder logic
     let folder = "misc"
     if (isImage) folder = "courses"
     else if (context === "lesson") folder = "lessons"
@@ -47,13 +41,20 @@ export async function POST(req: NextRequest) {
 
     const filePath = `${folder}/${fileName}`
 
-    // ♻️ Stream file chunks instead of loading entire buffer
+    // ♻️ Convert ReadableStream → Buffer safely
     const stream = file.stream()
+    const reader = stream.getReader()
     const chunks: Uint8Array[] = []
-    for await (const chunk of stream) chunks.push(chunk)
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (value) chunks.push(value)
+    }
+
     const buffer = Buffer.concat(chunks)
 
-    // 📦 Upload to Supabase Storage
+    // 📦 Upload to Supabase
     const { error: uploadError } = await supabase.storage
       .from(bucket)
       .upload(filePath, buffer, {
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: uploadError.message }, { status: 500 })
     }
 
-    // 🌍 Generate appropriate URL
+    // 🌍 Generate file URL
     let fileUrl: string
     if (isImage) {
       const { data } = supabase.storage.from(bucket).getPublicUrl(filePath)
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
     } else {
       const { data, error } = await supabase.storage
         .from(bucket)
-        .createSignedUrl(filePath, 60 * 60 * 24) // valid for 24 hours
+        .createSignedUrl(filePath, 60 * 60 * 24)
       if (error) throw error
       fileUrl = data.signedUrl
     }

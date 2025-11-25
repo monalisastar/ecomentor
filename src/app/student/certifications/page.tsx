@@ -15,12 +15,11 @@ export default function CertificationsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  // 🧠 Fetch student certificates from backend
   useEffect(() => {
     async function fetchCertificates() {
       try {
         setLoading(true)
-        const res = await fetch('/api/certificates')
+        const res = await fetch('/api/certificates', { cache: 'no-store' })
         const data = await res.json()
 
         if (!res.ok) {
@@ -29,38 +28,29 @@ export default function CertificationsPage() {
           return
         }
 
-        // 🧩 Normalize response for UI
-        const normalized: Certification[] = data.map((cert: any) => ({
-          id: cert.id,
-          title: cert.courseTitle,
-          courseSlug: cert.courseSlug,
-          issuedDate: cert.issueDate
-            ? new Date(cert.issueDate).toLocaleDateString('en-GB', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })
-            : 'Pending Issue',
-          status:
-            cert.status === 'VERIFIED'
-              ? 'Verified'
-              : cert.status === 'PENDING'
-              ? 'In Progress'
-              : 'Revoked',
-          thumbnail:
-            cert.status === 'VERIFIED'
-              ? '/images/certificate-green.png'
-              : cert.status === 'PENDING'
-              ? '/images/certificate-yellow.png'
-              : '/images/certificate-red.png',
-          certificateUrl: cert.certificateUrl || '',
-        }))
+        // ✅ FIXED Normalization Logic
+        const normalized = data.map((cert: any) => {
+          const rawStatus = cert.status?.toString().trim().toLowerCase()
+
+          let statusLabel = 'Revoked'
+          if (rawStatus === 'verified') statusLabel = 'Verified'
+          else if (rawStatus === 'pending' || rawStatus === 'in progress')
+            statusLabel = 'In Progress'
+
+          return {
+            id: cert.id,
+            title: cert.courseTitle || 'Untitled Course',
+            status: statusLabel,
+            issueDate: cert.issueDate,
+            courseSlug: cert.courseSlug,
+            verificationUrl: cert.verificationUrl,
+          }
+        })
 
         setCertifications(normalized)
-      } catch (err: any) {
-        console.error('Error fetching certificates:', err)
-        setError(err.message)
-        toast.error('Network error fetching certificates.')
+      } catch (err) {
+        console.error('❌ Error fetching certificates:', err)
+        toast.error('Error fetching certificates.')
       } finally {
         setLoading(false)
       }
@@ -69,46 +59,36 @@ export default function CertificationsPage() {
     fetchCertificates()
   }, [])
 
-  // 💬 Error UI
-  if (error)
-    return (
-      <main className="min-h-screen flex items-center justify-center text-red-600">
-        <div className="text-center bg-red-50 border border-red-200 rounded-xl px-6 py-5 shadow-sm">
-          <p className="font-semibold mb-1">Error loading certificates</p>
-          <p className="text-sm text-red-700">{error}</p>
-        </div>
-      </main>
-    )
+  const filtered = certifications.filter((cert) => {
+    const matchesQuery = cert.title.toLowerCase().includes(query.toLowerCase())
+    const matchesStatus =
+      statusFilter === 'All' || cert.status === statusFilter
+    return matchesQuery && matchesStatus
+  })
 
-  // 🌱 Main Dashboard
   return (
-    <main className="min-h-screen bg-gray-50 text-gray-800">
-      <div className="max-w-7xl mx-auto px-6 py-10 space-y-10">
-        {/* 🏅 Header */}
-        <CertificationHeader />
+    <section className="space-y-8">
+      <CertificationHeader count={certifications.length} />
+      <CertificationFilterBar
+        query={query}
+        setQuery={setQuery}
+        statusFilter={statusFilter}
+        setStatusFilter={setStatusFilter}
+      />
 
-        {/* 🔍 Filter Bar */}
-        <CertificationFilterBar
-          query={query}
-          setQuery={setQuery}
-          statusFilter={statusFilter}
-          setStatusFilter={setStatusFilter}
-        />
-
-        {/* 🧾 Grid */}
-        <CertificationGrid
-          certifications={certifications}
-          query={query}
-          statusFilter={statusFilter}
-        />
-      </div>
-
-      {/* ⏳ Loading Overlay */}
-      {loading && (
-        <div className="fixed inset-0 bg-white/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <Loader2 size={36} className="animate-spin text-green-600" />
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="animate-spin h-6 w-6 text-emerald-600" />
         </div>
+      ) : error ? (
+        <p className="text-red-500 text-center">{error}</p>
+      ) : (
+        <CertificationGrid
+          certifications={filtered}
+          query={query}
+          statusFilter={statusFilter}
+        />
       )}
-    </main>
+    </section>
   )
 }

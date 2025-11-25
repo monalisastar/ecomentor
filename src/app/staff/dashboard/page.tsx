@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
 import { GraduationCap, Award, Users, TrendingUp } from 'lucide-react'
-import UpcomingTasks from './components/UpcomingTasks' // ✅ Added import
+import UpcomingTasks from './components/UpcomingTasks'
 
 export default function StaffDashboardPage() {
   const { data: session, status } = useSession()
@@ -16,7 +16,7 @@ export default function StaffDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // ✅ Ensure staff cookie is set (for middleware)
+  // ✅ Ensure staff cookie is set
   useEffect(() => {
     async function ensureStaffRole() {
       try {
@@ -25,23 +25,16 @@ export default function StaffDashboardPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ role: 'staff' }),
         })
-        if (res.ok) {
-          console.log('✅ Staff role cookie enforced.')
-        } else {
-          console.warn('⚠️ Failed to set staff cookie.')
-        }
+        if (!res.ok) console.warn('⚠️ Failed to set staff cookie.')
       } catch (error) {
         console.error('❌ Error setting role cookie:', error)
       }
     }
 
-    // Only set cookie after session is confirmed authenticated
-    if (status === 'authenticated') {
-      ensureStaffRole()
-    }
+    if (status === 'authenticated') ensureStaffRole()
   }, [status])
 
-  // 🧠 Redirect non-staff users
+  // 🧭 Redirect unauthorized users
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login')
@@ -58,7 +51,7 @@ export default function StaffDashboardPage() {
     }
   }, [status, session, router])
 
-  // 📊 Fetch overview and recent activity
+  // 📊 Load overview + recent enrollments
   useEffect(() => {
     async function loadData() {
       try {
@@ -105,25 +98,38 @@ export default function StaffDashboardPage() {
 
   const name = session?.user?.name?.split(' ')[0] || 'Instructor'
 
+  // ✅ Formatters
+  function formatNumber(value: number | null | undefined) {
+    if (value === null || value === undefined || isNaN(value)) return 'No data'
+    if (value === 0) return '0'
+    return new Intl.NumberFormat().format(value)
+  }
+
+  function formatPercent(value: number | null | undefined) {
+    if (value === null || value === undefined || isNaN(value)) return 'No data'
+    return `${value.toFixed(1).replace(/\.0$/, '')}%`
+  }
+
+  // ✅ Dashboard cards
   const cards = [
     {
       label: 'Total Students',
-      value: stats?.totalUsers || 0,
+      value: formatNumber(stats?.totalUsers),
       icon: <Users className="text-green-600" size={22} />,
     },
     {
       label: 'Total Enrollments',
-      value: stats?.totalEnrollments || 0,
+      value: formatNumber(stats?.totalEnrollments),
       icon: <GraduationCap className="text-green-600" size={22} />,
     },
     {
       label: 'Certificates Issued',
-      value: stats?.completedEnrollments || 0,
+      value: formatNumber(stats?.completedEnrollments),
       icon: <Award className="text-green-600" size={22} />,
     },
     {
-      label: 'Avg Progress',
-      value: `${stats?.averageProgress || 0}%`,
+      label: 'Average Progress',
+      value: formatPercent(stats?.averageProgress),
       icon: <TrendingUp className="text-green-600" size={22} />,
     },
   ]
@@ -180,7 +186,7 @@ export default function StaffDashboardPage() {
         </div>
       </section>
 
-      {/* 🎯 Upcoming Tasks (Dynamic) */}
+      {/* 🎯 Upcoming Tasks */}
       <section>
         <h2 className="text-xl font-semibold text-gray-900 mb-4">
           Upcoming Tasks

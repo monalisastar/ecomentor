@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ error: "User not found" }, { status: 404 })
 
     const roles = user.roles || ["student"]
-    if (!roles.includes("lecturer") && !roles.includes("admin"))
+    if (!roles.includes("staff") && !roles.includes("admin"))
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     const { id } = params
@@ -92,7 +92,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       return NextResponse.json({ error: "User not found" }, { status: 404 })
 
     const roles = user.roles || ["student"]
-    if (!roles.includes("lecturer") && !roles.includes("admin"))
+    if (!roles.includes("staff") && !roles.includes("admin"))
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     const { id } = params

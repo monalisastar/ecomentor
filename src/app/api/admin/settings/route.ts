@@ -4,14 +4,14 @@ import { getToken } from "next-auth/jwt"
 
 /**
  * ✅ GET /api/admin/settings
- * Fetch current system and certificate default settings
+ * Fetch current system, branding, and certificate default settings
  */
 export async function GET(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
   if (!token?.email)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  // 🔒 Ensure only admins can access
+  // 🔒 Only admins allowed
   const user = await prisma.user.findUnique({
     where: { email: token.email },
     select: { id: true, roles: true, name: true },
@@ -19,39 +19,61 @@ export async function GET(req: NextRequest) {
   if (!user?.roles?.includes("admin"))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-  // 🧠 Load certificate design created by this admin (if any)
+  // 🎨 Certificate Design (personal to this admin)
   const certDesign = await prisma.certificateDesign.findFirst({
     where: { createdBy: user.id },
   })
 
-  const settings = {
-    issuerName: user?.name || "Eco-Mentor Climate LMS",
-    verifiedBy: "Administrator",
+  // ⚙️ System Settings (global)
+  let settings = await prisma.adminSettings.findFirst()
+  if (!settings) {
+    settings = await prisma.adminSettings.create({
+      data: {
+        platformName: "Eco-Mentor LMS",
+        supportEmail: "support@eco-mentor.org",
+        primaryBrandColor: "#1B5E20",
+        issuerName: "Eco-Mentor Climate LMS",
+        verifiedByDefault: "Administrator",
+        maintenanceMode: false,
+        autoVerifyCertificates: false,
+        blockchainMintingEnabled: false,
+      },
+    })
+  }
+
+  // 🧩 Merge and Normalize Output
+  return NextResponse.json({
+    platformName: settings.platformName,
+    supportEmail: settings.supportEmail,
+    brandColor: settings.primaryBrandColor,
+    defaultLanguage: settings.defaultLanguage ?? "en",
+    issuerName: certDesign?.createdBy ? certDesign.createdBy : settings.issuerName,
+    verifiedBy: settings.verifiedByDefault,
     logoUrl: certDesign?.logoUrl || null,
     signatureUrl: certDesign?.signatureUrl || null,
     backgroundUrl: certDesign?.backgroundUrl || null,
-    certificateColor: certDesign?.color || "#1B5E20",
-    maintenanceMode: false,
-    autoVerifyCertificates: false,
-    enrollmentLocked: false,
-    emailNotifications: true,
-    weeklyReports: false,
-    debugLogging: false,
-  }
-
-  return NextResponse.json(settings)
+    certificateColor: certDesign?.color || settings.primaryBrandColor,
+    maintenanceMode: settings.maintenanceMode,
+    autoVerifyCertificates: settings.autoVerifyCertificates,
+    enrollmentLocked: settings.enrollmentLock,
+    emailNotifications: settings.emailNotifications,
+    weeklyReports: settings.weeklyReportsToAdmins,
+    debugLogging: settings.enableDebugLogging,
+    blockchainMintingEnabled: settings.blockchainMintingEnabled,
+    blockchainNetworkDefault: settings.blockchainNetworkDefault || "polygon-amoy",
+    blockchainContractDefault: settings.blockchainContractDefault || process.env.ECO_CERT_CONTRACT,
+  })
 }
 
 /**
  * ✅ PATCH /api/admin/settings
- * Save updated settings to Prisma
+ * Update certificate design + global admin settings
  */
 export async function PATCH(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
   if (!token?.email)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  // 🔒 Check for admin privileges
   const user = await prisma.user.findUnique({
     where: { email: token.email },
     select: { id: true, roles: true },
@@ -61,8 +83,8 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json()
 
-  // 🧩 Update or create certificate design record
-  const updated = await prisma.certificateDesign.upsert({
+  // 🎨 Update Certificate Design for this admin
+  const design = await prisma.certificateDesign.upsert({
     where: { createdBy: user.id },
     update: {
       logoUrl: body.logoUrl,
@@ -80,6 +102,49 @@ export async function PATCH(req: NextRequest) {
     },
   })
 
-  // (Optional) You can persist other toggles in a separate table later
-  return NextResponse.json({ success: true, certificateDesign: updated })
+  // ⚙️ Update Global Admin Settings
+  const settings = await prisma.adminSettings.upsert({
+    where: { id: body.id || "global-admin-settings" },
+    update: {
+      platformName: body.platformName,
+      supportEmail: body.supportEmail,
+      primaryBrandColor: body.brandColor,
+      defaultLanguage: body.defaultLanguage,
+      issuerName: body.issuerName,
+      verifiedByDefault: body.verifiedBy,
+      maintenanceMode: body.maintenanceMode,
+      autoVerifyCertificates: body.autoVerifyCertificates,
+      enrollmentLock: body.enrollmentLocked,
+      emailNotifications: body.emailNotifications,
+      weeklyReportsToAdmins: body.weeklyReports,
+      enableDebugLogging: body.debugLogging,
+      blockchainMintingEnabled: body.blockchainMintingEnabled,
+      blockchainNetworkDefault: body.blockchainNetworkDefault,
+      blockchainContractDefault: body.blockchainContractDefault,
+      updatedAt: new Date(),
+    },
+    create: {
+      platformName: body.platformName,
+      supportEmail: body.supportEmail,
+      primaryBrandColor: body.brandColor,
+      defaultLanguage: body.defaultLanguage,
+      issuerName: body.issuerName,
+      verifiedByDefault: body.verifiedBy,
+      maintenanceMode: body.maintenanceMode,
+      autoVerifyCertificates: body.autoVerifyCertificates,
+      enrollmentLock: body.enrollmentLocked,
+      emailNotifications: body.emailNotifications,
+      weeklyReportsToAdmins: body.weeklyReports,
+      enableDebugLogging: body.debugLogging,
+      blockchainMintingEnabled: body.blockchainMintingEnabled,
+      blockchainNetworkDefault: body.blockchainNetworkDefault,
+      blockchainContractDefault: body.blockchainContractDefault,
+    },
+  })
+
+  return NextResponse.json({
+    success: true,
+    certificateDesign: design,
+    settings,
+  })
 }

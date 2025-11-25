@@ -1,9 +1,19 @@
-'use client'
+'use client';
 
-import Link from "next/link";;
-import { Facebook, Twitter, Linkedin } from "lucide-react";;
+import Link from "next/link";
+import { Facebook, Twitter, Linkedin } from "lucide-react";
 
-export default function Footer() {
+// 🧩 Static data for CMS integration
+export const staticData = {
+  p_1: "Empowering Action Through Climate Knowledge.",
+};
+
+// ✅ Allow external CMS props
+type FooterProps = Partial<typeof staticData>;
+
+export default function Footer(props: FooterProps = {}) {
+  const data = { ...staticData, ...props };
+
   return (
     <footer className="bg-black text-white py-12 px-6 md:px-12 border-t border-white/10">
       <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-12">
@@ -12,7 +22,7 @@ export default function Footer() {
         <div>
           <h3 className="text-2xl font-bold mb-3">Eco-Mentor</h3>
           <p className="text-sm text-gray-400 leading-relaxed">
-            Empowering Action Through Climate Knowledge.
+            {data.p_1}
           </p>
           <p className="text-xs text-gray-600 mt-6">
             &copy; {new Date().getFullYear()} Eco-Mentor. All rights reserved.
@@ -23,7 +33,7 @@ export default function Footer() {
         <div>
           <h4 className="font-semibold text-white mb-3">Quick Links</h4>
           <ul className="space-y-2 text-sm text-gray-400">
-            {['Home', 'About', 'Courses', 'Contact'].map((label) => (
+            {["Home", "About", "Courses", "Contact"].map((label) => (
               <li key={label}>
                 <Link
                   href={`/${label.toLowerCase()}`}
@@ -47,6 +57,5 @@ export default function Footer() {
         </div>
       </div>
     </footer>
-  )
+  );
 }
-

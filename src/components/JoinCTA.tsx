@@ -1,9 +1,19 @@
-'use client'
+'use client';
 
-import Image from "next/image";;
-import Link from "next/link";;
+import Image from "next/image";
+import Link from "next/link";
 
-export default function JoinCTA() {
+// 🧩 Static data for CMS integration
+export const staticData = {
+  p_1: "Start your journey into climate action, GHG mastery, and global impact. Join thousands already leading the change.",
+};
+
+// ✅ Allow external CMS overrides
+type JoinCTAProps = Partial<typeof staticData>;
+
+export default function JoinCTA(props: JoinCTAProps = {}) {
+  const data = { ...staticData, ...props };
+
   return (
     <section className="relative h-[80vh] w-full text-white overflow-hidden">
       {/* ✅ Background Image */}
@@ -12,7 +22,8 @@ export default function JoinCTA() {
         alt="Join Eco-Mentor"
         fill
         className="absolute z-0 object-cover"
-        quality={100}
+        quality={90}
+        priority
       />
 
       {/* ✅ Soft dark overlay */}
@@ -24,9 +35,7 @@ export default function JoinCTA() {
           Become a Certified Climate Leader
         </h2>
 
-        <p className="text-lg max-w-xl mb-8 text-white/90">
-          Start your journey into climate action, GHG mastery, and global impact. Join thousands already leading the change.
-        </p>
+        <p className="text-lg max-w-xl mb-8 text-white/90">{data.p_1}</p>
 
         <Link href="/register">
           <button className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-full font-semibold shadow-lg transition">
@@ -35,6 +44,5 @@ export default function JoinCTA() {
         </Link>
       </div>
     </section>
-  )
+  );
 }
-

@@ -13,9 +13,10 @@ export default function LoginPage() {
   const { data: session, status } = useSession();
   const [form, setForm] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   //
-  // 🔁 Auto-redirect if already logged in
+  // 🔁 If logged in, redirect based on role
   //
   useEffect(() => {
     if (status === "authenticated") {
@@ -25,23 +26,23 @@ export default function LoginPage() {
   }, [status, session]);
 
   //
-  // 🧭 Helper to centralize redirect logic
+  // 🚦 Central redirect logic
   //
   const redirectByRole = (roles: string[]) => {
     if (roles.includes("admin")) router.replace("/admin/dashboard");
-    else if (roles.some((r) => ["staff", "lecturer"].includes(r)))
+    else if (roles.includes("staff") || roles.includes("lecturer"))
       router.replace("/staff/dashboard");
     else router.replace("/student/dashboard");
   };
 
   //
-  // 🧠 Handle input
+  // 🧠 Controlled inputs
   //
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [e.target.name]: e.target.value });
 
   //
-  // 🚀 Handle submit
+  // 🔑 Credentials login
   //
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,9 +56,9 @@ export default function LoginPage() {
       });
 
       if (res?.error) throw new Error(res.error);
+
       toast.success("Login successful!");
 
-      // 🔄 Re-fetch session to get roles
       const sessionRes = await fetch("/api/auth/session");
       const sessionData = await sessionRes.json();
       const roles = sessionData?.user?.roles || [];
@@ -71,8 +72,19 @@ export default function LoginPage() {
   };
 
   //
-  // 🖼️ UI
+  // 🌐 Google Sign-In
   //
+  const handleGoogleLogin = async () => {
+    try {
+      setGoogleLoading(true);
+      await signIn("google", { callbackUrl: "/student/dashboard" });
+    } catch (e) {
+      toast.error("Google authentication failed");
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   return (
     <section className="relative min-h-screen flex items-center justify-center bg-black">
       {/* 🌍 Background */}
@@ -84,6 +96,7 @@ export default function LoginPage() {
         priority
       />
 
+      {/* 🧊 Glass card */}
       <motion.div
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
@@ -94,7 +107,7 @@ export default function LoginPage() {
           Sign In to Eco-Mentor
         </h2>
 
-        {/* 🧩 Credentials Login */}
+        {/* 🧩 Credentials Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="email"
@@ -105,6 +118,7 @@ export default function LoginPage() {
             required
             className="w-full px-4 py-2 rounded-md bg-white/80 text-black placeholder-gray-600 focus:outline-none"
           />
+
           <input
             type="password"
             name="password"
@@ -124,20 +138,61 @@ export default function LoginPage() {
           </button>
         </form>
 
+        {/* 🔗 Forgot Password */}
+        <div className="mt-3 text-right">
+          <Link
+            href="/forgot-password"
+            className="text-sm text-white hover:text-green-200 underline"
+          >
+            Forgot your password?
+          </Link>
+        </div>
+
         {/* 🌐 Google Login */}
         <div className="mt-6 text-center">
           <p className="text-sm mb-2">Or sign in with</p>
+
           <button
-            onClick={() =>
-              signIn("google", { callbackUrl: "/student/dashboard" })
-            }
-            className="w-full bg-white text-black font-medium py-2 rounded-md shadow hover:bg-gray-200 transition"
+            type="button"   // ⭐ CRITICAL – prevents form submission
+            onClick={handleGoogleLogin}
+            disabled={googleLoading}
+            className="flex items-center justify-center gap-2 w-full bg-white text-black font-medium py-2 rounded-md shadow hover:bg-gray-200 transition disabled:opacity-50"
           >
-            Continue with Google
+            {googleLoading ? (
+              <span className="animate-pulse">Connecting...</span>
+            ) : (
+              <>
+                {/* Google SVG */}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 48 48"
+                  width="20"
+                  height="20"
+                >
+                  <path
+                    fill="#EA4335"
+                    d="M24 9.5c3.54 0 6.7 1.22 9.18 3.6l6.82-6.82C35.9 2.95 30.3 0 24 0 14.64 0 6.48 5.38 2.56 13.22l7.98 6.19C12.24 12.1 17.66 9.5 24 9.5z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M46.98 24.55c0-1.64-.15-3.22-.42-4.75H24v9h12.9c-.56 2.95-2.26 5.45-4.79 7.15l7.38 5.73c4.32-3.99 6.79-9.88 6.79-17.13z"
+                  />
+                  <path
+                    fill="#4A90E2"
+                    d="M9.04 28.41A14.5 14.5 0 0 1 8.5 24c0-1.53.27-3.01.77-4.41l-7.98-6.19A23.94 23.94 0 0 0 0 24c0 3.9.93 7.57 2.56 10.94l7.98-6.19z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M24 48c6.48 0 11.92-2.15 15.89-5.83l-7.38-5.73C30.41 38.42 27.36 39.5 24 39.5c-6.34 0-11.76-4.1-13.98-9.89l-7.98 6.19C6.48 42.62 14.64 48 24 48z"
+                  />
+                </svg>
+                Continue with Google
+              </>
+            )}
           </button>
         </div>
 
-        {/* 🧭 Register link */}
+        {/* 🔗 Register */}
         <p className="text-sm text-center mt-6">
           Don’t have an account?{" "}
           <Link

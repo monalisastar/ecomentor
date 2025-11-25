@@ -12,7 +12,7 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select'
-import { Loader2, ImagePlus } from 'lucide-react'
+import { Loader2, ImagePlus, PlusCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import UploadPanel from '@/components/UploadPanel'
 
@@ -31,6 +31,7 @@ export default function CourseForm({
 }: CourseFormProps) {
   const [title, setTitle] = useState(initialData?.title || '')
   const [category, setCategory] = useState(initialData?.category || '')
+  const [customCategory, setCustomCategory] = useState('')
   const [tier, setTier] = useState(initialData?.tier || '')
   const [scope, setScope] = useState(initialData?.scope || '')
   const [priceUSD, setPriceUSD] = useState(initialData?.priceUSD?.toString() || '')
@@ -38,6 +39,8 @@ export default function CourseForm({
   const [description, setDescription] = useState(initialData?.description || '')
   const [imageUrl, setImageUrl] = useState<string | null>(initialData?.image || null)
   const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState<Record<string, boolean>>({})
+  const [customMode, setCustomMode] = useState(false)
 
   useEffect(() => {
     if (initialData) {
@@ -52,11 +55,24 @@ export default function CourseForm({
     }
   }, [initialData])
 
-  const handleSubmit = async () => {
-    if (!title || !category) {
-      toast.error('Title and category are required.')
-      return
+  const validateForm = () => {
+    const newErrors: Record<string, boolean> = {
+      title: !title.trim(),
+      category: !category,
+      tier: !tier,
+      scope: !scope,
+      description: !description.trim(),
+      priceUSD: !priceUSD || Number(priceUSD) <= 0,
+      imageUrl: !imageUrl,
     }
+    setErrors(newErrors)
+    const hasError = Object.values(newErrors).some(Boolean)
+    if (hasError) toast.error('⚠️ Please fill in all required fields before submitting.')
+    return !hasError
+  }
+
+  const handleSubmit = async () => {
+    if (!validateForm()) return
 
     try {
       setSaving(true)
@@ -84,8 +100,8 @@ export default function CourseForm({
 
       toast.success(
         mode === 'edit'
-          ? 'Course updated successfully!'
-          : 'Course created successfully!'
+          ? '✅ Course updated successfully!'
+          : '🎉 Course created successfully!'
       )
       onSuccess?.()
     } catch (err: any) {
@@ -109,10 +125,16 @@ export default function CourseForm({
             <img
               src={imageUrl}
               alt="Course Cover"
-              className="w-full h-48 object-cover rounded-xl border border-white/30 shadow-md"
+              className={`w-full h-48 object-cover rounded-xl border shadow-md ${
+                errors.imageUrl ? 'border-red-500' : 'border-white/30'
+              }`}
             />
           ) : (
-            <div className="border border-dashed border-white/40 rounded-xl p-6 text-center text-gray-200 backdrop-blur-md">
+            <div
+              className={`border border-dashed rounded-xl p-6 text-center text-gray-200 backdrop-blur-md ${
+                errors.imageUrl ? 'border-red-500' : 'border-white/40'
+              }`}
+            >
               <ImagePlus className="mx-auto mb-2 opacity-80" />
               Upload a course cover
             </div>
@@ -125,61 +147,142 @@ export default function CourseForm({
             onUploaded={(files) => {
               const first = files?.[0]?.url ?? null
               setImageUrl(first)
+              if (first) setErrors((prev) => ({ ...prev, imageUrl: false }))
             }}
           />
         </div>
 
         {/* 🏷 Title */}
         <div className="flex flex-col gap-2">
-          <Label className="text-gray-100 font-medium">Course Title</Label>
+          <Label className="text-gray-100 font-medium">Course Title *</Label>
           <Input
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => {
+              setTitle(e.target.value)
+              if (e.target.value) setErrors((prev) => ({ ...prev, title: false }))
+            }}
             placeholder="e.g. Introduction to Carbon Accounting"
-            className="bg-white/20 border-white/30 text-white placeholder:text-gray-300 focus:ring-green-400"
+            className={`bg-white/20 border text-white placeholder:text-gray-300 focus:ring-green-400 ${
+              errors.title ? 'border-red-500' : 'border-white/30'
+            }`}
           />
         </div>
 
         {/* 🌿 Category */}
         <div className="flex flex-col gap-2">
-          <Label className="text-gray-100 font-medium">Category</Label>
-          <Select onValueChange={setCategory} value={category}>
-            <SelectTrigger className="bg-white/20 border-white/30 text-white">
-              <SelectValue placeholder="Select category" />
-            </SelectTrigger>
-            <SelectContent className="bg-gray-900/80 text-white border-white/30">
-              <SelectItem value="GHG_ACCOUNTING">GHG Accounting</SelectItem>
-              <SelectItem value="CARBON_PROJECT_DEVELOPMENT">Carbon Project Development</SelectItem>
-              <SelectItem value="CARBON_MARKETS">Carbon Markets</SelectItem>
-              <SelectItem value="MRV_SYSTEMS">MRV Systems</SelectItem>
-              <SelectItem value="CARBON_POLICY">Carbon Policy</SelectItem>
-              <SelectItem value="CLIMATE_FINANCE">Climate Finance</SelectItem>
-              <SelectItem value="SUSTAINABLE_AGRICULTURE">Sustainable Agriculture</SelectItem>
-              <SelectItem value="ENERGY_EFFICIENCY">Energy Efficiency</SelectItem>
-            </SelectContent>
-          </Select>
+          <Label className="text-gray-100 font-medium flex items-center justify-between">
+            Category *
+            {!customMode && (
+              <button
+                onClick={() => setCustomMode(true)}
+                type="button"
+                className="text-xs text-green-300 flex items-center gap-1 hover:underline"
+              >
+                <PlusCircle size={14} /> Add new
+              </button>
+            )}
+          </Label>
+
+          {!customMode ? (
+            <Select
+              onValueChange={(v) => {
+                setCategory(v)
+                setErrors((prev) => ({ ...prev, category: false }))
+              }}
+              value={category}
+            >
+              <SelectTrigger
+                className={`bg-white/20 border text-white ${
+                  errors.category ? 'border-red-500' : 'border-white/30'
+                }`}
+              >
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-900/80 text-white border-white/30">
+                <SelectItem value="GHG_ACCOUNTING">GHG Accounting</SelectItem>
+                <SelectItem value="CARBON_PROJECT_DEVELOPMENT">
+                  Carbon Project Development
+                </SelectItem>
+                <SelectItem value="CARBON_MARKETS">Carbon Markets</SelectItem>
+                <SelectItem value="MRV_SYSTEMS">MRV Systems</SelectItem>
+                <SelectItem value="CARBON_POLICY">Carbon Policy</SelectItem>
+                <SelectItem value="CLIMATE_FINANCE">Climate Finance</SelectItem>
+                <SelectItem value="SUSTAINABLE_AGRICULTURE">
+                  Sustainable Agriculture
+                </SelectItem>
+                <SelectItem value="ENERGY_EFFICIENCY">Energy Efficiency</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : (
+            <div className="flex gap-2">
+              <Input
+                placeholder="Enter new category name..."
+                value={customCategory}
+                onChange={(e) => setCustomCategory(e.target.value)}
+                className="bg-white/20 border text-white placeholder:text-gray-300 flex-1"
+              />
+              <Button
+                variant="outline"
+                className="text-white border-white/30 hover:bg-green-600/70"
+                onClick={() => {
+                  if (!customCategory.trim()) {
+                    toast.error('Please enter a category name')
+                    return
+                  }
+                  setCategory(customCategory.trim())
+                  setCustomCategory('')
+                  setCustomMode(false)
+                  toast.success(`Added new category: ${customCategory}`)
+                }}
+              >
+                Save
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* 🧩 Tier + Scope */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div className="flex flex-col gap-2">
-            <Label className="text-gray-100 font-medium">Tier</Label>
-            <Select onValueChange={setTier} value={tier}>
-              <SelectTrigger className="bg-white/20 border-white/30 text-white">
+            <Label className="text-gray-100 font-medium">Tier *</Label>
+            <Select
+              onValueChange={(v) => {
+                setTier(v)
+                setErrors((prev) => ({ ...prev, tier: false }))
+              }}
+              value={tier}
+            >
+              <SelectTrigger
+                className={`bg-white/20 border text-white ${
+                  errors.tier ? 'border-red-500' : 'border-white/30'
+                }`}
+              >
                 <SelectValue placeholder="Select tier" />
               </SelectTrigger>
               <SelectContent className="bg-gray-900/80 text-white border-white/30">
                 <SelectItem value="FOUNDATIONAL">Foundational</SelectItem>
                 <SelectItem value="PROFESSIONAL">Professional</SelectItem>
-                <SelectItem value="ADVANCED_PRACTITIONER">Advanced Practitioner</SelectItem>
+                <SelectItem value="ADVANCED_PRACTITIONER">
+                  Advanced Practitioner
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label className="text-gray-100 font-medium">GHG Scope</Label>
-            <Select onValueChange={setScope} value={scope}>
-              <SelectTrigger className="bg-white/20 border-white/30 text-white">
+            <Label className="text-gray-100 font-medium">GHG Scope *</Label>
+            <Select
+              onValueChange={(v) => {
+                setScope(v)
+                setErrors((prev) => ({ ...prev, scope: false }))
+              }}
+              value={scope}
+            >
+              <SelectTrigger
+                className={`bg-white/20 border text-white ${
+                  errors.scope ? 'border-red-500' : 'border-white/30'
+                }`}
+              >
                 <SelectValue placeholder="Select scope" />
               </SelectTrigger>
               <SelectContent className="bg-gray-900/80 text-white border-white/30">
@@ -194,13 +297,18 @@ export default function CourseForm({
 
         {/* 💬 Description */}
         <div className="flex flex-col gap-2">
-          <Label className="text-gray-100 font-medium">Description</Label>
+          <Label className="text-gray-100 font-medium">Description *</Label>
           <Textarea
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={(e) => {
+              setDescription(e.target.value)
+              if (e.target.value) setErrors((prev) => ({ ...prev, description: false }))
+            }}
             placeholder="Briefly describe what this course covers..."
             rows={4}
-            className="bg-white/20 border-white/30 text-white placeholder:text-gray-300"
+            className={`bg-white/20 border text-white placeholder:text-gray-300 ${
+              errors.description ? 'border-red-500' : 'border-white/30'
+            }`}
           />
         </div>
 
@@ -221,13 +329,18 @@ export default function CourseForm({
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label className="text-gray-100 font-medium">Price (USD)</Label>
+            <Label className="text-gray-100 font-medium">Price (USD) *</Label>
             <Input
               type="number"
               value={priceUSD}
-              onChange={(e) => setPriceUSD(e.target.value)}
+              onChange={(e) => {
+                setPriceUSD(e.target.value)
+                if (e.target.value) setErrors((prev) => ({ ...prev, priceUSD: false }))
+              }}
               placeholder="e.g. 59.99"
-              className="bg-white/20 border-white/30 text-white placeholder:text-gray-300 focus:ring-green-400"
+              className={`bg-white/20 border text-white placeholder:text-gray-300 focus:ring-green-400 ${
+                errors.priceUSD ? 'border-red-500' : 'border-white/30'
+              }`}
             />
           </div>
         </div>

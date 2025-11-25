@@ -1,69 +1,109 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 
-interface Params {
-  params: { lessonId: string }
-}
-
-/** 🧠 GET /api/lessons/[lessonId]/quiz */
-export async function GET(req: Request, { params }: Params) {
+/**
+ * 🧠 GET /api/lessons/[id]/quiz
+ * Fetches all quiz questions for a specific lesson.
+ */
+export async function GET(
+  req: Request,
+  context: { params: Promise<{ id: string }> } // ✅ awaitable params
+) {
   try {
-    const { lessonId } = params
+    const { id } = await context.params // ✅ required in Next.js 15
+
     const questions = await prisma.lessonQuiz.findMany({
-      where: { lessonId },
+      where: { lessonId: id },
       orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        question: true,
+        optionA: true,
+        optionB: true,
+        optionC: true,
+        optionD: true,
+        correct: true,
+      },
     })
+
     return NextResponse.json(questions)
   } catch (err) {
-    console.error(err)
-    return NextResponse.json({ error: 'Failed to fetch quiz questions' }, { status: 500 })
+    console.error('❌ [GET /lessons/:id/quiz] Failed to fetch quiz questions:', err)
+    return NextResponse.json(
+      { error: 'Failed to fetch quiz questions' },
+      { status: 500 }
+    )
   }
 }
 
-/** 🧩 POST /api/lessons/[lessonId]/quiz */
-export async function POST(req: Request, { params }: Params) {
+/**
+ * 🧩 POST /api/lessons/[id]/quiz
+ * Saves one or more quiz questions for a lesson.
+ * Accepts JSON body: either a single object or array of questions.
+ */
+export async function POST(
+  req: Request,
+  context: { params: Promise<{ id: string }> }
+) {
   try {
-    const { lessonId } = params
+    const { id } = await context.params
     const body = await req.json()
+    const questions = Array.isArray(body) ? body : [body]
 
-    const questions = Array.isArray(body)
-      ? body
-      : [body] // allow single or multiple
+    if (!questions.length) {
+      return NextResponse.json({ error: 'No quiz data provided' }, { status: 400 })
+    }
 
     const created = await prisma.lessonQuiz.createMany({
       data: questions.map((q) => ({
-        lessonId,
+        lessonId: id,
         question: q.question,
-        optionA: q.options[0],
-        optionB: q.options[1],
-        optionC: q.options[2],
-        optionD: q.options[3],
-        correct: q.correct,
+        optionA: q.options?.[0] || '',
+        optionB: q.options?.[1] || '',
+        optionC: q.options?.[2] || '',
+        optionD: q.options?.[3] || '',
+        correct: q.correct || '',
       })),
     })
 
-    return NextResponse.json(created)
+    return NextResponse.json({
+      message: `✅ ${created.count} quiz question(s) saved successfully.`,
+      count: created.count,
+    })
   } catch (err) {
-    console.error(err)
-    return NextResponse.json({ error: 'Failed to save quiz questions' }, { status: 500 })
+    console.error('❌ [POST /lessons/:id/quiz] Failed to save quiz questions:', err)
+    return NextResponse.json(
+      { error: 'Failed to save quiz questions' },
+      { status: 500 }
+    )
   }
 }
 
-/** 🗑️ DELETE /api/lessons/[lessonId]/quiz?id=questionId */
-export async function DELETE(req: Request, { params }: Params) {
+/**
+ * 🗑️ DELETE /api/lessons/[id]/quiz?id=questionId
+ * Deletes a single quiz question by ID.
+ */
+export async function DELETE(
+  req: Request,
+  context: { params: Promise<{ id: string }> }
+) {
   try {
-    const { lessonId } = params
+    await context.params // not used but awaited for consistency
     const { searchParams } = new URL(req.url)
-    const id = searchParams.get('id')
+    const qid = searchParams.get('id')
 
-    if (!id)
+    if (!qid) {
       return NextResponse.json({ error: 'Question ID missing' }, { status: 400 })
+    }
 
-    await prisma.lessonQuiz.delete({ where: { id } })
+    await prisma.lessonQuiz.delete({ where: { id: qid } })
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ message: '✅ Question deleted successfully.' })
   } catch (err) {
-    console.error(err)
-    return NextResponse.json({ error: 'Failed to delete question' }, { status: 500 })
+    console.error('❌ [DELETE /lessons/:id/quiz] Failed to delete question:', err)
+    return NextResponse.json(
+      { error: 'Failed to delete question' },
+      { status: 500 }
+    )
   }
 }

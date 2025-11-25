@@ -1,8 +1,19 @@
-'use client'
+'use client';
 
-import { useState } from "react";;
-import { motion } from "framer-motion";;
-import Image from "next/image";;
+import { useState } from "react";
+import { motion } from "framer-motion";
+import Image from "next/image";
+
+// 🧩 Static data for CMS (auto-editable later)
+export const staticData = {
+  "h1_1": "Eco-Mentor Shop",
+  "p_1": "Explore digital and physical goods that promote climate action — powered by our token, AERA.",
+  "button_1": "What is AERA?",
+  "p_2": "Category",
+  "p_3": "Price",
+  "button_4": "Buy Now",
+  "p_5": "AERA is the Eco-Mentor token inspired by the word 'air'. It powers eco-conscious purchases within the platform — from apparel to digital unlocks."
+};
 
 const products = [
   {
@@ -77,28 +88,26 @@ const products = [
     image: '/shop/ai.jpg',
     status: 'coming',
   },
-]
+];
 
 export default function ShopPage() {
-  const [showInfo, setShowInfo] = useState(false)
+  const [showInfo, setShowInfo] = useState(false);
 
   return (
     <main className="relative min-h-screen text-white bg-gradient-to-br from-[#0b1e2e] via-[#123b52] to-[#0b1e2e] overflow-hidden px-6 py-20 md:px-16">
-      {/* Matching Blue Glassmorphism Overlay */}
+      {/* Glass overlay */}
       <div className="absolute inset-0 bg-white/10 backdrop-blur-md z-0" />
 
       <section className="relative z-10 max-w-6xl mx-auto space-y-16">
         {/* Hero */}
         <div className="text-center space-y-4">
-          <h1 className="text-4xl md:text-5xl font-bold">Eco-Mentor Shop</h1>
-          <p className="text-gray-300 max-w-xl mx-auto">
-            Explore digital and physical goods that promote climate action — powered by our token, <span className="text-green-400">AERA</span>.
-          </p>
+          <h1 className="text-4xl md:text-5xl font-bold">{staticData.h1_1}</h1>
+          <p className="text-gray-300 max-w-xl mx-auto">{staticData.p_1}</p>
           <button
             onClick={() => setShowInfo(true)}
-            className="text-sm underline text-green-400 hover:text-green-300"
+            className="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-md font-medium text-white transition"
           >
-            What is AERA?
+            {staticData.button_1}
           </button>
         </div>
 
@@ -123,17 +132,19 @@ export default function ShopPage() {
               </div>
               <div className="p-4 space-y-2">
                 <h3 className="text-lg font-semibold text-white">{product.name}</h3>
-                <p className="text-sm text-gray-300">{product.type}</p>
-                <p className="text-green-400 font-semibold">{product.price} {product.token}</p>
+                <p className="text-sm text-gray-300">{`${staticData.p_2}: ${product.type}`}</p>
+                <p className="text-green-400 font-semibold">
+                  {`${staticData.p_3}: ${product.price} ${product.token}`}
+                </p>
                 <button
-                  disabled={product.status !== 'available'}
+                  disabled={product.status !== "available"}
                   className={`w-full py-2 mt-2 rounded-md font-medium transition ${
-                    product.status === 'available'
-                      ? 'bg-green-600 hover:bg-green-700 text-white'
-                      : 'bg-white/10 text-white/50 cursor-not-allowed'
+                    product.status === "available"
+                      ? "bg-green-600 hover:bg-green-700 text-white"
+                      : "bg-white/10 text-white/50 cursor-not-allowed"
                   }`}
                 >
-                  {product.status === 'available' ? 'Buy with AERA' : 'Coming Soon'}
+                  {staticData.button_4}
                 </button>
               </div>
             </motion.div>
@@ -145,14 +156,7 @@ export default function ShopPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-6">
             <div className="bg-white/10 backdrop-blur-md p-6 max-w-xl rounded-xl text-white space-y-4 border border-white/20">
               <h2 className="text-2xl font-bold text-green-400">What is AERA?</h2>
-              <p>
-                <strong>AERA</strong> is the Eco-Mentor shop token inspired by the word “air.”
-                It powers eco-conscious purchases within the platform — from apparel to digital unlocks.
-              </p>
-              <p>
-                You can earn AERA by participating in challenges, referring learners, or buying it
-                via supported platforms (coming soon).
-              </p>
+              <p>{staticData.p_5}</p>
               <button
                 onClick={() => setShowInfo(false)}
                 className="mt-4 px-4 py-2 bg-green-600 rounded hover:bg-green-700 font-medium"
@@ -164,6 +168,5 @@ export default function ShopPage() {
         )}
       </section>
     </main>
-  )
+  );
 }
-

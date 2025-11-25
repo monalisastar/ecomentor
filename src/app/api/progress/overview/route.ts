@@ -5,7 +5,6 @@ import { authOptions } from "@/lib/authOptions"
 
 export async function GET() {
   try {
-    // ✅ Use getServerSession instead of getToken (works with JWT strategy)
     const session = await getServerSession(authOptions)
 
     if (!session?.user?.email) {
@@ -13,59 +12,109 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const userEmail = session.user.email
-
-    // 🔍 Fetch the user
     const user = await prisma.user.findUnique({
-      where: { email: userEmail },
+      where: { email: session.user.email },
       select: { id: true, roles: true },
     })
 
-    if (!user) {
+    if (!user)
       return NextResponse.json({ error: "User not found" }, { status: 404 })
-    }
 
     const roles = user.roles || ["student"]
 
     //
-    // 🧠 ADMIN / LECTURER DASHBOARD
+    // 🧠 ADMIN DASHBOARD (global stats)
     //
-    if (roles.includes("admin") || roles.includes("lecturer")) {
+    if (roles.includes("admin")) {
       const [totalUsers, totalEnrollments, completedEnrollments, avgProgress] =
         await Promise.all([
-          prisma.user.count(),
+          prisma.user.count({ where: { roles: { has: "student" } } }),
           prisma.enrollment.count(),
           prisma.enrollment.count({ where: { completed: true } }),
           prisma.enrollment.aggregate({ _avg: { progress: true } }),
         ])
 
-      const topStudents = await prisma.enrollment.findMany({
-        where: { completed: true },
-        include: {
-          user: { select: { name: true, email: true } },
-          course: { select: { title: true, slug: true } },
-        },
-        orderBy: { updatedAt: "desc" },
-        take: 5,
-      })
-
       return NextResponse.json(
         {
-          role: roles[0],
+          role: "admin",
           summary: {
             totalUsers,
             totalEnrollments,
             completedEnrollments,
             averageProgress: Math.round(avgProgress._avg.progress || 0),
           },
-          topStudents,
         },
         { status: 200 }
       )
     }
 
     //
-    // 🧠 STUDENT DASHBOARD
+    // 👨‍🏫 STAFF DASHBOARD (only their courses)
+    //
+    if (roles.includes("staff") || roles.includes("lecturer")) {
+      // 🧩 Gather course slugs taught by this instructor
+      const courses = await prisma.course.findMany({
+        where: { instructorId: user.id },
+        select: { id: true, slug: true },
+      })
+      const courseIds = courses.map((c) => c.id)
+      const courseSlugs = courses.map((c) => c.slug)
+
+      // if no courses yet, return zeros safely
+      if (courseIds.length === 0) {
+        return NextResponse.json(
+          {
+            role: "staff",
+            summary: {
+              totalUsers: 0,
+              totalEnrollments: 0,
+              completedEnrollments: 0,
+              averageProgress: 0,
+            },
+          },
+          { status: 200 }
+        )
+      }
+
+      // 🧮 Compute aggregates for instructor's courses
+      const [uniqueStudents, totalEnrollments, completedEnrollments, avgProgress, totalCertificates] =
+        await Promise.all([
+          prisma.enrollment.groupBy({
+            by: ["userId"],
+            where: { courseId: { in: courseIds } },
+            _count: true,
+          }),
+          prisma.enrollment.count({
+            where: { courseId: { in: courseIds } },
+          }),
+          prisma.enrollment.count({
+            where: { courseId: { in: courseIds }, completed: true },
+          }),
+          prisma.enrollment.aggregate({
+            where: { courseId: { in: courseIds } },
+            _avg: { progress: true },
+          }),
+          prisma.certificate.count({
+            where: { courseSlug: { in: courseSlugs } },
+          }),
+        ])
+
+      return NextResponse.json(
+        {
+          role: "staff",
+          summary: {
+            totalUsers: uniqueStudents.length, // distinct learners
+            totalEnrollments,
+            completedEnrollments: totalCertificates, // certificates issued for their courses
+            averageProgress: Math.round(avgProgress._avg.progress || 0),
+          },
+        },
+        { status: 200 }
+      )
+    }
+
+    //
+    // 🎓 STUDENT DASHBOARD (personal stats)
     //
     const [enrolledCount, completedCount, certificateCount, avgProgress] =
       await Promise.all([

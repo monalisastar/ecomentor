@@ -5,7 +5,7 @@ import CourseManagementHeader from './components/CourseManagementHeader'
 import CourseFilters from './components/CourseFilters'
 import CourseTable from './components/CourseTable'
 import CourseEmptyState from './components/CourseEmptyState'
-import { useCourses } from './hooks/useCourses'
+import useCourses from './hooks/useCourses' // ✅ Corrected import
 
 export default function StaffCoursesPage() {
   const router = useRouter()
@@ -30,7 +30,8 @@ export default function StaffCoursesPage() {
         courses.length > 0 ? (
           <CourseTable courses={courses} onRefresh={refetch} />
         ) : (
-          <CourseEmptyState />
+          // ✅ Added the onCreateCourse handler so "Create First Course" button works
+          <CourseEmptyState onCreateCourse={() => router.push('/staff/courses/new')} />
         )
       )}
     </main>

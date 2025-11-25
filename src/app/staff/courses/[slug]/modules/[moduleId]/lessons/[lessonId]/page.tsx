@@ -15,8 +15,10 @@ import {
   Video,
   LayoutGrid,
   Save,
+  ClipboardList,
 } from 'lucide-react'
 import UploadPanel from '@/components/UploadPanel'
+import LessonQuizPanel from './components/LessonQuizPanel'
 
 export default function LessonEditorPage() {
   const router = useRouter()
@@ -25,14 +27,14 @@ export default function LessonEditorPage() {
   const [lesson, setLesson] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'uploads' | 'content'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'uploads' | 'content' | 'quiz'>('overview')
 
   // 🧠 Local form state
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [content, setContent] = useState('')
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
-  const [documentUrl, setDocumentUrl] = useState<string | null>(null)
+  const [fileUrl, setFileUrl] = useState<string | null>(null)
 
   // 🔄 Fetch lesson details
   useEffect(() => {
@@ -46,7 +48,7 @@ export default function LessonEditorPage() {
         setDescription(data.description || '')
         setContent(data.content || '')
         setVideoUrl(data.videoUrl || null)
-        setDocumentUrl(data.documentUrl || null)
+        setFileUrl(data.fileUrl || null) // ✅ Correct field
       } catch (err: any) {
         toast.error(err.message || 'Error loading lesson')
       } finally {
@@ -66,7 +68,8 @@ export default function LessonEditorPage() {
         description,
         content,
         videoUrl,
-        documentUrl,
+        fileUrl, // ✅ updated
+        fileType: fileUrl ? 'document' : null,
       }
 
       const res = await fetch(`/api/lessons/${lessonId}`, {
@@ -81,6 +84,21 @@ export default function LessonEditorPage() {
       toast.error(err.message || 'Error saving lesson.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // ⚙️ Patch helper — auto save field (for uploads)
+  const autoUpdateField = async (field: string, value: string | null) => {
+    try {
+      if (!lessonId) return
+      await fetch(`/api/lessons/${lessonId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
+      })
+      toast.success(`${field === 'videoUrl' ? '🎥 Video' : '📘 File'} linked successfully!`)
+    } catch {
+      toast.error(`Failed to update ${field}`)
     }
   }
 
@@ -126,44 +144,25 @@ export default function LessonEditorPage() {
 
         {/* Tabs */}
         <div className="flex flex-wrap gap-2 mb-6">
-          <Button
-            onClick={() => setActiveTab('overview')}
-            variant={activeTab === 'overview' ? 'default' : 'outline'}
-            className={`flex items-center gap-2 ${
-              activeTab === 'overview'
-                ? 'bg-green-700 text-white'
-                : 'bg-white/10 text-gray-200 border-white/20'
-            }`}
-          >
-            <LayoutGrid size={16} />
-            Overview
-          </Button>
-
-          <Button
-            onClick={() => setActiveTab('uploads')}
-            variant={activeTab === 'uploads' ? 'default' : 'outline'}
-            className={`flex items-center gap-2 ${
-              activeTab === 'uploads'
-                ? 'bg-green-700 text-white'
-                : 'bg-white/10 text-gray-200 border-white/20'
-            }`}
-          >
-            <UploadCloud size={16} />
-            Uploads
-          </Button>
-
-          <Button
-            onClick={() => setActiveTab('content')}
-            variant={activeTab === 'content' ? 'default' : 'outline'}
-            className={`flex items-center gap-2 ${
-              activeTab === 'content'
-                ? 'bg-green-700 text-white'
-                : 'bg-white/10 text-gray-200 border-white/20'
-            }`}
-          >
-            <FileText size={16} />
-            Content
-          </Button>
+          {[
+            { key: 'overview', icon: LayoutGrid, label: 'Overview' },
+            { key: 'uploads', icon: UploadCloud, label: 'Uploads' },
+            { key: 'content', icon: FileText, label: 'Content' },
+            { key: 'quiz', icon: ClipboardList, label: 'Quizzes' },
+          ].map(({ key, icon: Icon, label }) => (
+            <Button
+              key={key}
+              onClick={() => setActiveTab(key as any)}
+              className={`flex items-center gap-2 ${
+                activeTab === key
+                  ? 'bg-green-700 text-white'
+                  : 'bg-white/10 text-gray-200 border-white/20'
+              }`}
+            >
+              <Icon size={16} />
+              {label}
+            </Button>
+          ))}
         </div>
 
         {/* Animated Tab Content */}
@@ -226,10 +225,12 @@ export default function LessonEditorPage() {
                   fixedContext="lesson-videos"
                   fileType="video"
                   multiple={false}
-                  onUploaded={(files) => {
+                  onUploaded={async (files) => {
                     const first = files?.[0]?.url ?? null
-                    setVideoUrl(first)
-                    toast.success('🎥 Video uploaded!')
+                    if (first) {
+                      setVideoUrl(first)
+                      await autoUpdateField('videoUrl', first)
+                    }
                   }}
                 />
               </div>
@@ -240,9 +241,9 @@ export default function LessonEditorPage() {
                   <FileText size={18} className="text-yellow-300" />
                   Lesson Document
                 </h3>
-                {documentUrl && (
+                {fileUrl && (
                   <iframe
-                    src={documentUrl}
+                    src={fileUrl}
                     className="w-full h-64 rounded-lg border border-white/20 bg-white/5"
                   />
                 )}
@@ -250,10 +251,13 @@ export default function LessonEditorPage() {
                   fixedContext="lesson-documents"
                   fileType="document"
                   multiple={false}
-                  onUploaded={(files) => {
+                  onUploaded={async (files) => {
                     const first = files?.[0]?.url ?? null
-                    setDocumentUrl(first)
-                    toast.success('📘 Document uploaded!')
+                    if (first) {
+                      setFileUrl(first)
+                      await autoUpdateField('fileUrl', first)
+                      await autoUpdateField('fileType', 'document')
+                    }
                   }}
                 />
               </div>
@@ -277,6 +281,18 @@ export default function LessonEditorPage() {
                 className="bg-white/10 text-white border-white/30 min-h-[300px]"
                 placeholder="Write or paste your lesson content here..."
               />
+            </motion.div>
+          )}
+
+          {activeTab === 'quiz' && (
+            <motion.div
+              key="quiz"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.3 }}
+            >
+              <LessonQuizPanel lessonId={lessonId as string} />
             </motion.div>
           )}
         </AnimatePresence>

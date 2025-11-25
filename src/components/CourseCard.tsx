@@ -1,4 +1,11 @@
-'use client'
+'use client';
+
+// 🧩 Auto-generated static data for CMS
+export const staticData = {
+  "p_1": "{description}"
+};
+
+
 import Link from "next/link";;
 import Image from "next/image";;
 
@@ -26,12 +33,9 @@ export default function CourseCard({ title, slug, description, image }: Props) {
           </h3>
         </div>
         <div className="p-4 h-28">
-          <p className="text-sm text-gray-600">{description}</p>
+          <p className="text-sm text-gray-600">{"{staticData.p_1}"}</p>
         </div>
       </div>
     </Link>
   )
 }
-
-
-

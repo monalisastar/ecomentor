@@ -1,18 +1,19 @@
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 import prisma from "@/lib/prisma"
 import { getToken } from "next-auth/jwt"
-import type { NextRequest } from "next/server"
 
-//
-// ✅ GET /api/lessons/[id]
-// Fetch a single lesson with its parent module & course
-//
+/**
+ * 📘 GET /api/lessons/[id]
+ * ---------------------------------------------------------
+ * Fetch a single lesson with its parent module & course.
+ * Public endpoint (for viewing).
+ */
 export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
+  _req: NextRequest,
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params
+    const { id } = await context.params
 
     const lesson = await prisma.lesson.findUnique({
       where: { id },
@@ -28,91 +29,126 @@ export async function GET(
     if (!lesson)
       return NextResponse.json({ error: "Lesson not found" }, { status: 404 })
 
-    return NextResponse.json(lesson, { status: 200 })
-  } catch (error) {
-    console.error("GET /lessons/[id] error:", error)
+    // 🧩 Backward compatibility — populate metadata placeholders if missing
+    const safeLesson = {
+      ...lesson,
+      videoName: lesson.videoName || "N/A",
+      videoSize: lesson.videoSize || "Unknown",
+      videoUploaded: lesson.videoUploaded || "Not recorded",
+      fileName: lesson.fileName || "N/A",
+      fileSize: lesson.fileSize || "Unknown",
+      fileUploaded: lesson.fileUploaded || "Not recorded",
+    }
+
+    return NextResponse.json(safeLesson, { status: 200 })
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Unknown error occurred"
+    console.error("❌ GET /lessons/[id] error:", message)
     return NextResponse.json(
-      { error: "Failed to fetch lesson" },
+      { error: "Failed to fetch lesson", details: message },
       { status: 500 }
     )
   }
 }
 
-//
-// ✅ PATCH /api/lessons/[id]
-// Update lesson details (Lecturer/Admin only)
-// Supports text, video, and file uploads
-//
+/**
+ * ✏️ PATCH /api/lessons/[id]
+ * ---------------------------------------------------------
+ * Update lesson details and metadata (staff/lecturer/admin only).
+ */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 🔑 Auth check
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
     if (!token?.email)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const user = await prisma.user.findUnique({
       where: { email: token.email },
-      select: { roles: true },
+      select: { roles: true, name: true },
     })
     if (!user)
       return NextResponse.json({ error: "User not found" }, { status: 404 })
 
-    const roles = user.roles || ["student"]
-    if (!roles.includes("lecturer") && !roles.includes("admin"))
+    const allowedRoles = ["staff", "lecturer", "admin"]
+    const isAuthorized = user.roles.some((r) => allowedRoles.includes(r))
+    if (!isAuthorized)
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    const { id } = params
+    const { id } = await context.params
+    const body = await req.json()
+
     const {
       title,
       description,
       order,
+      duration,
       contentType,
       textContent,
       fileUrl,
       fileType,
+      fileName,
+      fileSize,
+      fileUploaded,
       videoUrl,
-      duration,
-    } = await req.json()
+      videoName,
+      videoSize,
+      videoUploaded,
+    } = body
 
-    // 🧩 Ensure at least one editable field exists
-    if (
-      !title &&
-      !description &&
-      !order &&
-      !contentType &&
-      !textContent &&
-      !fileUrl &&
-      !fileType &&
-      !videoUrl &&
-      !duration
-    ) {
+    const updateData: any = {
+      ...(title && { title }),
+      ...(description && { description }),
+      ...(order !== undefined && { order }),
+      ...(duration && { duration }),
+      ...(contentType && { contentType }),
+      ...(textContent !== undefined && { textContent }),
+      ...(fileUrl && { fileUrl }),
+      ...(fileType && { fileType }),
+      ...(fileName && { fileName }),
+      ...(fileSize && { fileSize }),
+      ...(fileUploaded && { fileUploaded }),
+      ...(videoUrl && { videoUrl }),
+      ...(videoName && { videoName }),
+      ...(videoSize && { videoSize }),
+      ...(videoUploaded && { videoUploaded }),
+      updatedBy: user.name || token.email,
+    }
+
+    // 🧠 Ensure not empty
+    if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
-        { error: "No valid fields provided for update" },
+        { error: "No editable fields provided for update" },
         { status: 400 }
       )
     }
 
-    // 🏗️ Update lesson
-    const updated = await prisma.lesson.update({
+    const existing = await prisma.lesson.findUnique({ where: { id } })
+    if (!existing)
+      return NextResponse.json({ error: "Lesson not found" }, { status: 404 })
+
+    // 🩹 If old lessons have videoUrl but missing metadata, preserve it
+    if (existing.videoUrl && !existing.videoName && !updateData.videoName) {
+      updateData.videoName = "Legacy Upload"
+      updateData.videoSize = "Unknown"
+      updateData.videoUploaded = new Date().toLocaleString()
+    }
+
+    if (existing.fileUrl && !existing.fileName && !updateData.fileName) {
+      updateData.fileName = "Legacy Document"
+      updateData.fileSize = "Unknown"
+      updateData.fileUploaded = new Date().toLocaleString()
+    }
+
+    const updatedLesson = await prisma.lesson.update({
       where: { id },
-      data: {
-        ...(title && { title }),
-        ...(description && { description }),
-        ...(order && { order }),
-        ...(duration && { duration }),
-        ...(contentType && { contentType }),
-        ...(textContent !== undefined && { textContent }),
-        ...(fileUrl && { fileUrl }),
-        ...(fileType && { fileType }),
-        ...(videoUrl && { videoUrl }),
-      },
+      data: updateData,
       select: {
         id: true,
         title: true,
-        slug: true,
         description: true,
         order: true,
         duration: true,
@@ -120,28 +156,37 @@ export async function PATCH(
         textContent: true,
         fileUrl: true,
         fileType: true,
+        fileName: true,
+        fileSize: true,
+        fileUploaded: true,
         videoUrl: true,
+        videoName: true,
+        videoSize: true,
+        videoUploaded: true,
         updatedAt: true,
       },
     })
 
-    return NextResponse.json(updated, { status: 200 })
-  } catch (error) {
-    console.error("PATCH /lessons/[id] error:", error)
+    return NextResponse.json(updatedLesson, { status: 200 })
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Unknown error occurred"
+    console.error("❌ PATCH /lessons/[id] error:", message)
     return NextResponse.json(
-      { error: "Failed to update lesson" },
+      { error: "Failed to update lesson", details: message },
       { status: 500 }
     )
   }
 }
 
-//
-// ✅ DELETE /api/lessons/[id]
-// Remove a lesson (Lecturer/Admin only)
-//
+/**
+ * 🗑 DELETE /api/lessons/[id]
+ * ---------------------------------------------------------
+ * Deletes a lesson (staff/lecturer/admin only).
+ */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
@@ -155,13 +200,13 @@ export async function DELETE(
     if (!user)
       return NextResponse.json({ error: "User not found" }, { status: 404 })
 
-    const roles = user.roles || ["student"]
-    if (!roles.includes("lecturer") && !roles.includes("admin"))
+    const allowedRoles = ["staff", "lecturer", "admin"]
+    const isAuthorized = user.roles.some((r) => allowedRoles.includes(r))
+    if (!isAuthorized)
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    const { id } = params
+    const { id } = await context.params
     const existing = await prisma.lesson.findUnique({ where: { id } })
-
     if (!existing)
       return NextResponse.json({ error: "Lesson not found" }, { status: 404 })
 
@@ -171,10 +216,12 @@ export async function DELETE(
       { message: "Lesson deleted successfully" },
       { status: 200 }
     )
-  } catch (error) {
-    console.error("DELETE /lessons/[id] error:", error)
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error ? error.message : "Unknown error occurred"
+    console.error("❌ DELETE /lessons/[id] error:", message)
     return NextResponse.json(
-      { error: "Failed to delete lesson" },
+      { error: "Failed to delete lesson", details: message },
       { status: 500 }
     )
   }

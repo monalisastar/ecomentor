@@ -22,16 +22,19 @@ export default function MyLearningPage() {
       try {
         setLoading(true)
         const data = await apiRequest('enrollments')
+
         const normalized = data.map((enrollment: any) => ({
           id: enrollment.id,
           courseId: enrollment.course?.id,
           title: enrollment.course?.title,
-          image: enrollment.course?.thumbnail || '/images/default-course.jpg',
+          // ✅ FIX: use correct field name “image” instead of “thumbnail”
+          image: enrollment.course?.image || '/images/default-course.jpg',
           progress: enrollment.progress || 0,
           completed: enrollment.completed || false,
           slug: enrollment.course?.slug,
           description: enrollment.course?.description,
         }))
+
         setEnrollments(normalized)
       } catch (err: any) {
         console.error('Error fetching enrollments:', err)
@@ -95,7 +98,7 @@ export default function MyLearningPage() {
         <LearningGrid courses={filteredCourses} loading={loading} />
       </div>
 
-      {/* Optional: global loading overlay */}
+      {/* ⏳ Global loading overlay */}
       {loading && (
         <div className="fixed inset-0 bg-white/40 backdrop-blur-sm flex items-center justify-center z-50">
           <Loader2

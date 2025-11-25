@@ -1,77 +1,121 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 import prisma from '@/lib/prisma'
+import { supabaseAdmin } from '@/lib/supabaseAdmin'
 
 /**
- * 📜 GET /api/certificates
+ * 🎓 GET /api/certificates
  * ---------------------------------------------------------
- * Returns all certificates belonging to the logged-in student.
- * Includes blockchain metadata for on-chain verified certificates.
- * Used by the student dashboard at /student/certifications.
+ * Returns all certificates belonging to the authenticated student,
+ * including course info (via Enrollment → Course).
  */
 export async function GET(req: NextRequest) {
   try {
-    // 🔒 1. Authenticate the user
+    // 1️⃣ Authenticate
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
-    if (!token?.email)
+    if (!token?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-    // 🧠 2. Find the logged-in student
+    // 2️⃣ Get user
     const user = await prisma.user.findUnique({
       where: { email: token.email },
-      select: { id: true },
+      select: { id: true, name: true },
     })
-
-    if (!user)
+    if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
 
-    // 🎓 3. Fetch all certificates for this student
+    // 3️⃣ Fetch certificates → include enrollment + course
     const certificates = await prisma.certificate.findMany({
-      where: { studentId: user.id },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        courseTitle: true,
-        courseSlug: true,
-        status: true,
-        issueDate: true,
-        certificateUrl: true,
-        verificationUrl: true,
-        verificationId: true,
-
-        // 🪙 Blockchain metadata (new)
-        blockchainTx: true,
-        blockchainContract: true,
-        blockchainNetwork: true,
+      where: {
+        studentId: user.id,
+        status: { in: ['PENDING', 'VERIFIED', 'REVOKED'] },
       },
+      include: {
+        enrollment: {
+          include: {
+            course: {
+              select: {
+                id: true,
+                title: true,
+                slug: true,
+                image: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
     })
 
-    // 🧩 4. Format results for frontend
-    const formatted = certificates.map((c) => ({
-      id: c.id,
-      title: c.courseTitle,
-      courseSlug: c.courseSlug,
-      issuedDate: c.issueDate
-        ? new Date(c.issueDate).toLocaleDateString()
-        : 'Not issued',
-      status:
-        c.status === 'VERIFIED'
-          ? 'Verified'
-          : c.status === 'REVOKED'
-          ? 'Revoked'
-          : 'In Progress',
-      thumbnail: '/images/certificate-placeholder.png', // fallback thumbnail
-      blockchainTx: c.blockchainTx,
-      blockchainContract: c.blockchainContract,
-      blockchainNetwork: c.blockchainNetwork,
-    }))
+    // 4️⃣ Status + Thumbnail fallback maps
+    const statusMap: Record<string, string> = {
+      VERIFIED: 'Verified',
+      PENDING: 'In Progress',
+      REVOKED: 'Revoked',
+    }
 
-    // ✅ 5. Return response
-    return NextResponse.json(formatted)
+    const thumbnailMap: Record<string, string> = {
+      VERIFIED: '/images/certificate-green.png',
+      PENDING: '/images/certificate-yellow.png',
+      REVOKED: '/images/certificate-red.png',
+    }
+
+    // 5️⃣ Format response
+    const formatted = await Promise.all(
+      certificates.map(async (cert) => {
+        const rawStatus = String(cert.status).toUpperCase()
+
+        // 🖼️ Prefer course image from Supabase bucket
+        let imageUrl =
+          cert.enrollment?.course?.image || thumbnailMap[rawStatus] || null
+
+        if (imageUrl && !imageUrl.startsWith('http')) {
+          const { data } = supabaseAdmin.storage
+            .from('eco-mentor-assets')
+            .getPublicUrl(imageUrl)
+          imageUrl = data?.publicUrl || imageUrl
+        }
+
+        return {
+          id: cert.id,
+          title:
+            cert.courseTitle ||
+            cert.enrollment?.course?.title ||
+            'Untitled Course',
+          courseSlug:
+            cert.courseSlug || cert.enrollment?.course?.slug || '',
+          issuedDate: cert.issueDate
+            ? new Date(cert.issueDate).toLocaleDateString('en-GB', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              })
+            : 'Pending Issue',
+          status: statusMap[rawStatus] ?? 'Unknown',
+          thumbnail: imageUrl,
+          certificateUrl: cert.certificateUrl || '',
+          verificationUrl: cert.verificationUrl || '',
+          blockchainTx: cert.blockchainTx ?? null,
+          blockchainContract: cert.blockchainContract ?? null,
+          blockchainNetwork: cert.blockchainNetwork ?? null,
+          verifiedBy: cert.verifiedBy ?? 'Not verified yet',
+          issuedBy: cert.issuedBy ?? 'Eco-Mentor Climate LMS',
+          course: {
+            title: cert.enrollment?.course?.title,
+            image: imageUrl,
+            slug: cert.enrollment?.course?.slug,
+          },
+        }
+      })
+    )
+
+    return NextResponse.json(formatted, { status: 200 })
   } catch (error: any) {
-    console.error('❌ Error fetching certificates:', error)
+    console.error('❌ [Certificates API] Error:', error)
     return NextResponse.json(
-      { error: 'Internal server error', details: error.message },
+      { error: 'Internal Server Error', details: error.message },
       { status: 500 }
     )
   }

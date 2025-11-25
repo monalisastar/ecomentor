@@ -4,14 +4,14 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { apiRequest } from '@/lib/api'
 import Image from 'next/image'
-import { Loader2, CheckCircle, CreditCard } from 'lucide-react'
+import { Loader2, CheckCircle, CreditCard, Smartphone } from 'lucide-react'
 
 export default function PaymentPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
 
   const courseSlug = searchParams.get('course')
-  const amount = searchParams.get('amount')
+  const amountParam = Number(searchParams.get('amount')) || 0
 
   const [course, setCourse] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -53,7 +53,7 @@ export default function PaymentPage() {
         courseId: course.id,
         paymentMethod: method,
         paymentStatus: 'PAID',
-        amountPaid: course.price || amount,
+        amountPaid: course.priceUSD || amountParam,
       })
 
       if (res.error) throw new Error(res.error)
@@ -97,24 +97,30 @@ export default function PaymentPage() {
         <h2 className="text-2xl font-semibold text-green-700 mb-2">
           Payment Successful!
         </h2>
-        <p className="text-gray-600 mb-6">
-          Redirecting you to your course...
-        </p>
+        <p className="text-gray-600 mb-6">Redirecting you to your course...</p>
       </div>
     )
+
+  // 💰 Currency Conversion (USD → KES)
+  const conversionRate = 150 // Example: 1 USD = 150 KES
+  const usdAmount = course.priceUSD || amountParam
+  const kesAmount = usdAmount * conversionRate
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-6 py-12">
       <div className="max-w-3xl w-full bg-white shadow-md rounded-xl overflow-hidden">
+        {/* 🖼️ Banner */}
         <Image
           src={course.image || '/images/default-course.jpg'}
           alt={course.title}
           width={1200}
           height={500}
+          unoptimized
           className="w-full h-56 object-cover"
         />
 
         <div className="p-8 text-center">
+          {/* 🧭 Course Info */}
           <h1 className="text-3xl font-semibold mb-3 text-gray-900">
             {course.title}
           </h1>
@@ -122,12 +128,17 @@ export default function PaymentPage() {
             {course.description || 'Course description coming soon.'}
           </p>
 
-          <div className="bg-gray-100 p-4 rounded-lg mb-8">
+          {/* 💰 Amount Display */}
+          <div className="bg-gray-100 p-5 rounded-lg mb-8">
             <p className="text-xl font-semibold text-gray-800">
-              Total Amount: <span className="text-green-700">KES {amount}</span>
+              Total Amount:{' '}
+              <span className="text-green-700">
+                KES {kesAmount.toLocaleString()} ({usdAmount} USD)
+              </span>
             </p>
           </div>
 
+          {/* 💳 Payment Buttons */}
           <div className="flex flex-col md:flex-row gap-4 justify-center">
             <button
               onClick={() => handlePayment('mpesa')}
@@ -138,11 +149,11 @@ export default function PaymentPage() {
                   : 'bg-green-600 hover:bg-green-700'
               }`}
             >
-              <Loader2
-                className={`w-5 h-5 animate-spin ${
-                  processing ? 'block' : 'hidden'
-                }`}
-              />
+              {processing ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Smartphone className="w-5 h-5" />
+              )}
               {processing ? 'Processing...' : 'Pay with M-Pesa'}
             </button>
 

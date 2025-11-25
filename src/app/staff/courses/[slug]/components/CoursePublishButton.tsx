@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import PublishConfirmModal from './PublishConfirmModal'
 
-
 interface Props {
   courseSlug: string
   isPublished: boolean
@@ -19,8 +18,8 @@ export default function CoursePublishButton({ courseSlug, isPublished }: Props) 
   const handlePublish = async () => {
     setLoading(true)
     try {
-      // 🧠 The API route will be created later: /api/staff/courses/[slug]/publish
-      const res = await fetch(`/api/staff/courses/${courseSlug}/publish`, {
+      // ✅ FIXED: correct endpoint path (no /staff)
+      const res = await fetch(`/api/courses/${courseSlug}/publish`, {
         method: 'PATCH',
       })
 
@@ -37,7 +36,11 @@ export default function CoursePublishButton({ courseSlug, isPublished }: Props) 
 
   if (isPublished)
     return (
-      <Button disabled variant="outline" className="gap-2 text-green-500 border-green-500/40">
+      <Button
+        disabled
+        variant="outline"
+        className="gap-2 text-green-500 border-green-500/40"
+      >
         <CheckCircle2 className="w-4 h-4" />
         Published
       </Button>
@@ -50,7 +53,11 @@ export default function CoursePublishButton({ courseSlug, isPublished }: Props) 
         className="bg-green-500 hover:bg-green-600 text-white gap-2"
         disabled={loading}
       >
-        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+        {loading ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : (
+          <UploadCloud className="w-4 h-4" />
+        )}
         Publish Course
       </Button>
 

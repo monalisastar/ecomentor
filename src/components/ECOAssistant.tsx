@@ -1,4 +1,12 @@
-'use client'
+'use client';
+
+// 🧩 Auto-generated static data for CMS
+export const staticData = {
+  "p_1": "Hello! I’m your ECO Assistant 🌱",
+  "p_2": "Ask me anything about your courses, certificates, or climate learning journey."
+};
+
+
 
 import { useState } from "react";;
 import { motion, AnimatePresence } from "framer-motion";;
@@ -43,8 +51,8 @@ export default function ECOAssistant() {
 
           {/* Chat Body */}
           <div className="flex-1 p-4 overflow-y-auto text-gray-800 dark:text-gray-100">
-            <p>Hello! I’m your ECO Assistant 🌱</p>
-            <p>Ask me anything about your courses, certificates, or climate learning journey.</p>
+            <p>{"{staticData.p_1}"}</p>
+            <p>{"{staticData.p_2}"}</p>
           </div>
 
           {/* Input */}

@@ -15,8 +15,11 @@ interface Props {
  * Manages high-level system toggles such as:
  *  - Maintenance Mode
  *  - Certificate Auto-Verification
+ *  - Blockchain Minting
  *  - Enrollment Lock
  *  - Email Notifications
+ *  - Weekly Reports
+ *  - Debug Logging
  */
 export default function SystemControlsPanel({ settings, setSettings }: Props) {
   const toggle = (key: string) =>
@@ -46,6 +49,17 @@ export default function SystemControlsPanel({ settings, setSettings }: Props) {
         />
       </SettingCard>
 
+      {/* 🪙 Blockchain Minting */}
+      <SettingCard
+        title="Blockchain Minting"
+        description="Automatically mints verified certificates as NFTs on the Polygon network."
+      >
+        <ToggleSwitch
+          enabled={settings.blockchainMintingEnabled || false}
+          onChange={() => toggle('blockchainMintingEnabled')}
+        />
+      </SettingCard>
+
       {/* 🧑‍🎓 Enrollment Lock */}
       <SettingCard
         title="Enrollment Lock"
@@ -63,7 +77,7 @@ export default function SystemControlsPanel({ settings, setSettings }: Props) {
         description="Send automatic progress and certificate emails to learners."
       >
         <ToggleSwitch
-          enabled={settings.emailNotifications || true}
+          enabled={settings.emailNotifications ?? true}
           onChange={() => toggle('emailNotifications')}
         />
       </SettingCard>
@@ -95,6 +109,7 @@ export default function SystemControlsPanel({ settings, setSettings }: Props) {
 
 /**
  * 💡 ToggleSwitch
+ * ---------------------------------------------------------
  * Reusable, animated switch built with Headless UI + Framer Motion
  */
 function ToggleSwitch({
@@ -114,7 +129,7 @@ function ToggleSwitch({
     >
       <span className="sr-only">Toggle setting</span>
       <motion.span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition`}
+        className="inline-block h-4 w-4 transform rounded-full bg-white shadow transition"
         layout
         transition={{ type: 'spring', stiffness: 500, damping: 30 }}
         animate={{ x: enabled ? 20 : 2 }}

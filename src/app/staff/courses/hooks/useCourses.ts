@@ -38,7 +38,7 @@ interface UseCoursesReturn {
  * ✅ Custom hook to fetch and manage staff courses
  * Supports live filters for category, scope, and published status
  */
-export function useCourses(): UseCoursesReturn {
+export default function useCourses(): UseCoursesReturn {
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
