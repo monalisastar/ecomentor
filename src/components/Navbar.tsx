@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
 import { Menu, X, Moon, Sun } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { toast } from "react-hot-toast";
 
 export default function Navbar() {
@@ -17,9 +17,24 @@ export default function Navbar() {
 
   const [mounted, setMounted] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-
   const [role, setRole] = useState<string | null>(null);
   const [menuItems, setMenuItems] = useState<{ href: string; label: string }[]>([]);
+
+  // ⭐ NEW: detect navbar height
+  const navRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const updateNavHeight = () => {
+      if (navRef.current) {
+        const height = navRef.current.offsetHeight;
+        document.documentElement.style.setProperty("--nav-height", `${height}px`);
+      }
+    };
+
+    updateNavHeight();
+    window.addEventListener("resize", updateNavHeight);
+    return () => window.removeEventListener("resize", updateNavHeight);
+  }, []);
 
   // Ensure hydration completed for theme + session
   useEffect(() => setMounted(true), []);
@@ -32,7 +47,7 @@ export default function Navbar() {
       .catch(() => console.warn("⚠️ Failed to load menu items"));
   }, []);
 
-  // Load role from session.user.roles[] OR localStorage fallback
+  // Load role
   useEffect(() => {
     if (status === "authenticated") {
       const roles = (session?.user as any)?.roles ?? [];
@@ -47,7 +62,7 @@ export default function Navbar() {
     if (stored) setRole(stored);
   }, [status, session]);
 
-  // Hide navbar on dashboard/auth pages
+  // Paths where navbar should be hidden
   const hidePaths = [
     "/login",
     "/register",
@@ -57,12 +72,12 @@ export default function Navbar() {
     "/student",
     "/staff",
     "/admin",
-    "/dashboard"
+    "/dashboard",
   ];
 
   if (hidePaths.some((p) => pathname.startsWith(p))) return null;
 
-  // Redirect user to correct dashboard depending on role
+  // Dashboard link
   const dashboardHref =
     role === "admin"
       ? "/admin/dashboard"
@@ -79,21 +94,24 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="w-full fixed top-0 left-0 z-50 bg-white/80 dark:bg-[#0b0f19]/80 backdrop-blur-xl border-b border-white/10 shadow-sm">
+    <nav
+      ref={navRef} // ⭐ NEW: attach ref
+      className="w-full fixed top-0 left-0 z-50 bg-white/80 dark:bg-[#0b0f19]/80 backdrop-blur-xl border-b border-white/10 shadow-sm"
+    >
       <div className="max-w-7xl mx-auto flex items-center justify-between px-4 py-3 md:px-8">
 
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2">
-          <Image
-            src="/eco-mentor-logo.png"
-            alt="Eco Mentor Logo"
-            width={40}
-            height={40}
-            priority
-          />
-          <span className="font-bold text-xl text-green-600 dark:text-green-400">
-            Eco-Mentor
-          </span>
+        <Link href="/" className="flex items-center">
+          <div className="px-3 py-2 rounded-xl bg-white shadow-md dark:bg-white/90 border border-white/70">
+            <Image
+              src="/ecomentorlogo.jpg"
+              alt="Eco Mentor Logo"
+              width={100}
+              height={40}
+              className="object-contain"
+              priority
+            />
+          </div>
         </Link>
 
         {/* Desktop Menu */}
@@ -160,18 +178,14 @@ export default function Navbar() {
         </div>
 
         {/* Mobile Menu Button */}
-        <button
-          className="md:hidden p-2"
-          onClick={() => setMobileOpen((v) => !v)}
-        >
+        <button className="md:hidden p-2" onClick={() => setMobileOpen((v) => !v)}>
           {mobileOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
       </div>
 
-      {/* Mobile Menu Drawer */}
+      {/* Mobile Drawer */}
       {mobileOpen && (
         <div className="md:hidden bg-white dark:bg-[#0b0f19] px-4 pb-4 pt-2 border-t border-gray-200 dark:border-gray-800">
-
           {menuItems.map((item) => (
             <Link
               key={item.href}
@@ -187,7 +201,6 @@ export default function Navbar() {
             </Link>
           ))}
 
-          {/* Mobile Auth */}
           {status === "authenticated" && role ? (
             <>
               <Link
@@ -225,7 +238,6 @@ export default function Navbar() {
             </>
           )}
 
-          {/* Mobile Theme Toggle */}
           {mounted && (
             <button
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}

@@ -9,10 +9,10 @@ import * as AboutEcoMentor from "@/components/AboutEcoMentor"
 
 // ✅ About Us page components
 import * as Hero from "@/app/about/components/Hero"
-import * as Philosophy from "@/app/about/components/Philosophy"
+import * as Philosophy from "@/app/about/components/mission"
 import * as CTASection from "@/app/about/components/CTASection"
 import * as Timeline from "@/app/about/components/Timeline"
-import * as TrustMeter from "@/app/about/components/TrustMeter"
+import * as TrustMeter from "@/app/about/components/whytrustus"
 
 /**
  * 🌿 getMergedContent(pageSlug)

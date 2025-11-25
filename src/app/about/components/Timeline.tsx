@@ -1,21 +1,23 @@
-
-
-
 'use client'
-// 🧩 Auto-generated static data for CMS
+
+// 🧩 CMS-ready static data
 export const staticData = {
-  "p_1": "Eco-Mentor was founded with a bold vision to revolutionize sustainability education through tech.",
-  "p_2": "Launched first carbon market and GHG accounting courses. Built core LMS & dashboard features.",
-  "p_3": "Global rollout of Eco-Mentor for African and worldwide learners. Launch of AERA token and rewards."
+  p_1:
+    "Eco-Mentor LMS was founded with a vision to redefine climate education by combining scientific credibility, technology, and accessible learning pathways.",
+  p_2:
+    "Launched our first GHG accounting and carbon market programs, deployed the Eco-Mentor LMS platform, and expanded our digital learning ecosystem.",
+  p_3:
+    "Scaling Eco-Mentor across Africa and globally through standards-aligned learning, blockchain-secured certification, and community impact initiatives."
 };
 
-
-import { motion } from "framer-motion";;
-import { FaSeedling, FaRocket, FaGlobeAfrica } from "react-icons/fa";;
+import { motion } from "framer-motion";
+import { FaSeedling, FaRocket, FaGlobeAfrica } from "react-icons/fa";
 
 export default function Timeline() {
   return (
     <section className="relative z-10 px-6 md:px-20 py-24 max-w-6xl mx-auto text-white">
+      
+      {/* Title */}
       <motion.h2
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -25,22 +27,26 @@ export default function Timeline() {
         Our Journey
       </motion.h2>
 
+      {/* Subtext */}
       <motion.p
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2, duration: 0.8 }}
-        className="text-center text-gray-300 max-w-3xl mx-auto mb-10"
+        className="text-center text-gray-300 max-w-3xl mx-auto mb-10 leading-relaxed"
       >
-        Explore how Eco-Mentor evolved from a simple idea into a movement for climate education and carbon innovation.
+        Discover how Eco-Mentor LMS grew from an innovative idea into a trusted platform for 
+        credible, practical, and technology-driven climate education.
       </motion.p>
 
       {/* Video Placeholder */}
       <div className="aspect-video bg-black/40 rounded-xl border border-dashed border-green-500 mb-12 flex items-center justify-center text-green-400 text-sm">
-        🎬 Video timeline coming soon...
+        🎬 Timeline video coming soon...
       </div>
 
-      {/* Milestone Timeline */}
+      {/* Milestones */}
       <div className="space-y-10">
+
+        {/* 2023 */}
         <motion.div
           className="flex items-start gap-6"
           initial={{ opacity: 0, x: -30 }}
@@ -49,11 +55,12 @@ export default function Timeline() {
         >
           <FaSeedling size={32} className="text-green-400" />
           <div>
-            <h4 className="text-xl font-semibold text-green-300">2023 — Seed Stage</h4>
-            <p className="text-gray-400">{"{staticData.p_1}"}</p>
+            <h4 className="text-xl font-semibold text-green-300">2023 — Foundation Stage</h4>
+            <p className="text-gray-400 leading-relaxed">{staticData.p_1}</p>
           </div>
         </motion.div>
 
+        {/* 2024 */}
         <motion.div
           className="flex items-start gap-6"
           initial={{ opacity: 0, x: -30 }}
@@ -62,11 +69,12 @@ export default function Timeline() {
         >
           <FaRocket size={32} className="text-green-400" />
           <div>
-            <h4 className="text-xl font-semibold text-green-300">2024 — Launch & Courses</h4>
-            <p className="text-gray-400">{"{staticData.p_2}"}</p>
+            <h4 className="text-xl font-semibold text-green-300">2024 — Launch & Programs</h4>
+            <p className="text-gray-400 leading-relaxed">{staticData.p_2}</p>
           </div>
         </motion.div>
 
+        {/* 2025+ */}
         <motion.div
           className="flex items-start gap-6"
           initial={{ opacity: 0, x: -30 }}
@@ -75,12 +83,12 @@ export default function Timeline() {
         >
           <FaGlobeAfrica size={32} className="text-green-400" />
           <div>
-            <h4 className="text-xl font-semibold text-green-300">2025+ — Expansion & Impact</h4>
-            <p className="text-gray-400">{"{staticData.p_3}"}</p>
+            <h4 className="text-xl font-semibold text-green-300">2025+ — Growth & Impact</h4>
+            <p className="text-gray-400 leading-relaxed">{staticData.p_3}</p>
           </div>
         </motion.div>
+
       </div>
     </section>
-  )
+  );
 }
-
