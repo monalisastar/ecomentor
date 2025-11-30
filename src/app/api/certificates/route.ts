@@ -57,9 +57,9 @@ export async function GET(req: NextRequest) {
     }
 
     const thumbnailMap: Record<string, string> = {
-      VERIFIED: '/images/certificate-green.png',
-      PENDING: '/images/certificate-yellow.png',
-      REVOKED: '/images/certificate-red.png',
+      VERIFIED: '/images/certificate-green.webp',
+      PENDING: '/images/certificate-yellow.webp',
+      REVOKED: '/images/certificate-red.webp',
     }
 
     // 5️⃣ Format response

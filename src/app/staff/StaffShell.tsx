@@ -46,7 +46,7 @@ export default function StaffShell({ children }: { children: React.ReactNode }) 
         }`}
       >
         <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100">
-          <img src="/eco-mentor-logo.png" alt="Eco-Mentor Logo" className="w-8 h-8 rounded-md" />
+          <img src="/eco-mentor-logo.webp" alt="Eco-Mentor Logo" className="w-8 h-8 rounded-md" />
           <h1 className="font-bold text-lg text-green-700">Eco-Mentor Staff</h1>
         </div>
 

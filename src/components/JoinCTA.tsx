@@ -18,7 +18,7 @@ export default function JoinCTA(props: JoinCTAProps = {}) {
     <section className="relative h-[80vh] w-full text-white overflow-hidden">
       {/* ✅ Background Image */}
       <Image
-        src="/images/join-bg.jpg"
+        src="/images/join-bg.webp"
         alt="Join Eco-Mentor"
         fill
         className="absolute z-0 object-cover"

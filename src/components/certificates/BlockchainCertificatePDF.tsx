@@ -79,7 +79,7 @@ export default function BlockchainCertificatePDF({
       <Page size="A4" style={styles.page}>
         <View style={styles.border}>
           <View style={styles.header}>
-            <Image src="/images/logo.png" style={styles.logo} />
+            <Image src="/images/logo.webp" style={styles.logo} />
             <Text style={styles.title}>Blockchain Certificate of Completion</Text>
             <Text style={styles.subtitle}>
               Empowering Climate Education — Verifiable on the Blockchain

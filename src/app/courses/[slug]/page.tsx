@@ -40,9 +40,11 @@ export default function CourseSlugPage() {
   useEffect(() => {
     if (!slug) return
     const normalizedSlug = Array.isArray(slug) ? slug[0] : slug
+
     async function fetchCourse() {
       try {
-        const res = await fetch(`/api/courses/${normalizedSlug}`)
+        // ✅ FIXED ROUTE
+        const res = await fetch(`/api/public/course/${normalizedSlug}`)
         if (!res.ok) throw new Error('Course not found')
         const data = await res.json()
         setCourse(data)
@@ -52,6 +54,7 @@ export default function CourseSlugPage() {
         setLoading(false)
       }
     }
+
     fetchCourse()
   }, [slug])
 
@@ -63,8 +66,21 @@ export default function CourseSlugPage() {
     }
   }
 
-  if (loading) return <div className="min-h-screen flex justify-center items-center text-white">Loading...</div>
-  if (error || !course) return <div className="min-h-screen flex justify-center items-center text-white">{error || 'Course not found'}</div>
+  if (loading) {
+    return (
+      <div className="min-h-screen flex justify-center items-center text-white">
+        Loading...
+      </div>
+    )
+  }
+
+  if (error || !course) {
+    return (
+      <div className="min-h-screen flex justify-center items-center text-white">
+        {error || 'Course not found'}
+      </div>
+    )
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#0b1e2e] via-[#133b52] to-[#0b1e2e] text-white px-6 py-20 md:px-12">
@@ -79,7 +95,9 @@ export default function CourseSlugPage() {
           />
           <div className="relative z-10">
             <h1 className="text-4xl md:text-5xl font-bold mb-4">{course.title}</h1>
-            <p className="text-lg text-gray-300 max-w-3xl mb-6">{course.description}</p>
+            <p className="text-lg text-gray-300 max-w-3xl mb-6">
+              {course.description}
+            </p>
 
             <div className="flex flex-wrap gap-4 text-sm text-gray-300 mb-6">
               {course.level && <span className="bg-white/10 px-3 py-1 rounded">{course.level}</span>}
@@ -124,7 +142,9 @@ export default function CourseSlugPage() {
         {/* What You'll Learn */}
         {course.whatYouLearn && (
           <section>
-            <h2 className="text-2xl font-bold mb-4 border-b border-white/10 pb-2">What You'll Learn</h2>
+            <h2 className="text-2xl font-bold mb-4 border-b border-white/10 pb-2">
+              What You'll Learn
+            </h2>
             <ul className="space-y-2 text-gray-300 list-disc list-inside">
               {course.whatYouLearn.map((item, i) => (
                 <li key={i}>{item}</li>
@@ -133,10 +153,12 @@ export default function CourseSlugPage() {
           </section>
         )}
 
-        {/* Skills You'll Gain */}
+        {/* Skills */}
         {course.skills && (
           <section>
-            <h2 className="text-2xl font-bold mb-4 border-b border-white/10 pb-2">Skills You'll Gain</h2>
+            <h2 className="text-2xl font-bold mb-4 border-b border-white/10 pb-2">
+              Skills You'll Gain
+            </h2>
             <div className="flex flex-wrap gap-3">
               {course.skills.map((skill, i) => (
                 <span key={i} className="bg-white/10 px-3 py-1 rounded-full text-gray-200 text-sm">
@@ -147,10 +169,12 @@ export default function CourseSlugPage() {
           </section>
         )}
 
-        {/* Tools You'll Learn */}
+        {/* Tools */}
         {course.tools && (
           <section>
-            <h2 className="text-2xl font-bold mb-4 border-b border-white/10 pb-2">Tools You'll Learn</h2>
+            <h2 className="text-2xl font-bold mb-4 border-b border-white/10 pb-2">
+              Tools You'll Learn
+            </h2>
             <div className="flex flex-wrap gap-3">
               {course.tools.map((tool, i) => (
                 <span key={i} className="bg-white/10 px-3 py-1 rounded-full text-gray-200 text-sm">
@@ -161,10 +185,12 @@ export default function CourseSlugPage() {
           </section>
         )}
 
-        {/* Course Curriculum */}
+        {/* Curriculum */}
         {course.modules && course.modules.length > 0 && (
           <section>
-            <h2 className="text-2xl font-bold mb-4 border-b border-white/10 pb-2">Course Curriculum</h2>
+            <h2 className="text-2xl font-bold mb-4 border-b border-white/10 pb-2">
+              Course Curriculum
+            </h2>
             <div className="space-y-3">
               {course.modules.map((mod) => (
                 <div
@@ -188,12 +214,14 @@ export default function CourseSlugPage() {
         {/* Instructor */}
         {course.instructor && (
           <section>
-            <h2 className="text-2xl font-bold mb-4 border-b border-white/10 pb-2">Instructor</h2>
+            <h2 className="text-2xl font-bold mb-4 border-b border-white/10 pb-2">
+              Instructor
+            </h2>
             <p className="text-gray-300">{course.instructor}</p>
           </section>
         )}
 
-        {/* Footer Info */}
+        {/* Footer */}
         <section className="border-t border-white/10 pt-8 text-gray-400 text-sm">
           <p>© {new Date().getFullYear()} Eco-Mentor. All rights reserved.</p>
         </section>

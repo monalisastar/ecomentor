@@ -77,7 +77,7 @@ export default function RecommendedCourses() {
           >
             <div className="relative w-full h-40">
               <Image
-                src={course.image || '/images/default-course.jpg'}
+                src={course.image || '/images/default-course.webp'}
                 alt={course.title}
                 fill
                 unoptimized

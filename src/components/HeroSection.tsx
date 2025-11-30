@@ -6,8 +6,8 @@ import { ArrowDownCircle } from "lucide-react";
 
 // 🧩 Auto-generated static data for CMS
 export const staticData = {
-  h1_1: "Empowering Action Through Climate Knowledge",
-  p_1: "Learn about GHG, carbon markets, tools & certification in a modern, tech-driven platform.",
+  h1_1: "Build the Skills That Power the Global Climate Economy",
+
   button_2: "Start Learning",
   button_3: "Browse Courses",
 };
@@ -22,7 +22,7 @@ export default function HeroSection(props: HeroSectionProps = {}) {
     <section className="relative h-screen w-full text-white overflow-hidden">
       {/* ✅ Background Image */}
       <Image
-        src="/images/hero-background.jpg"
+        src="/images/hero-background.webp"
         alt="Eco-Mentor Hero Background"
         fill
         priority
@@ -35,7 +35,7 @@ export default function HeroSection(props: HeroSectionProps = {}) {
           {data.h1_1}
         </h1>
         <p className="mt-4 text-base md:text-xl max-w-xl text-white/90">
-          {data.p_1}
+    
         </p>
 
         <div className="mt-6 flex flex-col sm:flex-row gap-4">

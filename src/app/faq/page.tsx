@@ -105,7 +105,7 @@ export default function FAQPage() {
 
   return (
     <main
-      className="min-h-screen bg-[url('/images/eco-bg.jpg')] bg-cover bg-center text-white px-6 py-24 md:px-20 relative"
+      className="min-h-screen bg-[url('/images/eco-bg.webp')] bg-cover bg-center text-white px-6 py-24 md:px-20 relative"
     >
       <div className="absolute inset-0 bg-gradient-to-br from-black/30 via-blue-900/20 to-green-900/10 z-0" />
 

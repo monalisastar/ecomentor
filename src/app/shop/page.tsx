@@ -22,7 +22,7 @@ const products = [
     type: 'Apparel',
     price: 120,
     token: 'AERA',
-    image: '/shop/hoodie.jpg',
+    image: '/shop/hoodie.webp',
     status: 'available',
   },
   {
@@ -31,7 +31,7 @@ const products = [
     type: 'Certificate',
     price: 80,
     token: 'AERA',
-    image: '/shop/certificate.jpg',
+    image: '/shop/certificate.webp',
     status: 'available',
   },
   {
@@ -40,7 +40,7 @@ const products = [
     type: 'Token Unlock',
     price: 250,
     token: 'AERA',
-    image: '/shop/premium-course.jpg',
+    image: '/shop/premium-course.webp',
     status: 'coming',
   },
   {
@@ -49,7 +49,7 @@ const products = [
     type: 'Donation',
     price: 100,
     token: 'AERA',
-    image: '/shop/donation.jpg',
+    image: '/shop/donation.webp',
     status: 'available',
   },
   {
@@ -58,7 +58,7 @@ const products = [
     type: 'Digital',
     price: 160,
     token: 'AERA',
-    image: '/shop/nft-cert.jpg',
+    image: '/shop/nft-cert.webp',
     status: 'coming',
   },
   {
@@ -67,7 +67,7 @@ const products = [
     type: 'Apparel',
     price: 45,
     token: 'AERA',
-    image: '/shop/notebook.jpg',
+    image: '/shop/notebook.webp',
     status: 'available',
   },
   {
@@ -76,7 +76,7 @@ const products = [
     type: 'Apparel',
     price: 95,
     token: 'AERA',
-    image: '/shop/tshirt.jpg',
+    image: '/shop/tshirt.webp',
     status: 'available',
   },
   {
@@ -85,7 +85,7 @@ const products = [
     type: 'Token Unlock',
     price: 300,
     token: 'AERA',
-    image: '/shop/ai.jpg',
+    image: '/shop/ai.webp',
     status: 'coming',
   },
 ];

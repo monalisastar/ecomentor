@@ -11,8 +11,8 @@ import * as AboutEcoMentor from "@/components/AboutEcoMentor"
 import * as Hero from "@/app/about/components/Hero"
 import * as Philosophy from "@/app/about/components/mission"
 import * as CTASection from "@/app/about/components/CTASection"
-import * as Timeline from "@/app/about/components/Timeline"
-import * as TrustMeter from "@/app/about/components/whytrustus"
+
+import * as TrustMeter from "@/app/about/components/StudentTestimonials"
 
 /**
  * 🌿 getMergedContent(pageSlug)

@@ -94,7 +94,7 @@ export default function EnrollCoursePage() {
       <div className="max-w-3xl w-full bg-white shadow-md rounded-xl overflow-hidden">
         {/* 🖼️ Course Banner */}
         <Image
-          src={course.image || '/images/default-course.jpg'}
+          src={course.image || '/images/default-course.webp'}
           alt={course.title}
           width={1200}
           height={500}

@@ -54,7 +54,7 @@ export async function GET(
     // ---------------------------------------------------------
 
     // Base ivory-green gradient background image (placeholder)
-    const bgPath = path.join(process.cwd(), "public/images/certificate-background.png");
+    const bgPath = path.join(process.cwd(), "public/images/certificate-background.webp");
     if (fs.existsSync(bgPath)) {
       const bgBytes = fs.readFileSync(bgPath);
       const bgImg = await pdfDoc.embedPng(bgBytes);
@@ -77,7 +77,7 @@ export async function GET(
     }
 
     // Leaf texture overlay (5–8% opacity)
-    const texturePath = path.join(process.cwd(), "public/images/certificate-texture.png");
+    const texturePath = path.join(process.cwd(), "public/images/certificate-texture.webp");
     if (fs.existsSync(texturePath)) {
       const txBytes = fs.readFileSync(texturePath);
       const txImg = await pdfDoc.embedPng(txBytes);
@@ -177,7 +177,7 @@ export async function GET(
     const sigPath = path.join(process.cwd(), "public/Signature_2.webp");
     if (fs.existsSync(sigPath)) {
       const buffer = fs.readFileSync(sigPath);
-      const png = await sharp(buffer).png().toBuffer();
+      const png = await sharp(buffer).webp().toBuffer();
       const sigImg = await pdfDoc.embedPng(png);
       page.drawImage(sigImg, {
         x: leftX,
@@ -248,10 +248,10 @@ export async function GET(
     // ---------------------------------------------------------
     // 🪩 QR + Polygon Logo (Bottom Right Mini Block)
     // ---------------------------------------------------------
-    const polygonPath = path.join(process.cwd(), "public/images/polygon-logo.png");
+    const polygonPath = path.join(process.cwd(), "public/images/polygon-logo.webp");
     if (fs.existsSync(polygonPath)) {
       const buffer = fs.readFileSync(polygonPath);
-      const img = await sharp(buffer).png().toBuffer();
+      const img = await sharp(buffer).webp().toBuffer();
       const polyImg = await pdfDoc.embedPng(img);
       page.drawImage(polyImg, {
         x: rightX,

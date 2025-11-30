@@ -6,8 +6,10 @@ import { Globe } from "lucide-react";
 // 🧩 Static data for CMS integration
 export const staticData = {
   h2_1: "Why Eco-Mentor Exists",
-  p_1: "Eco-Mentor is more than a learning platform — it’s a global initiative to educate and equip the next generation of carbon leaders. With expert-driven content, tools for real-world GHG tracking, and immersive coursework, we empower individuals and organizations to take meaningful action against climate change.",
-  p_2: "From climate basics to advanced carbon accounting, our programs are designed to meet you where you are — and take you where the planet needs you to be.",
+  p_1:
+    "Eco-Mentor is more than a learning platform — it is a global climate education initiative built to develop the next generation of carbon and sustainability leaders. Through expert-led content, real-world GHG tools, and technology-enhanced learning experiences, we equip individuals and organizations with the knowledge required to drive meaningful climate action.",
+  p_2:
+    "Our programs span foundational climate literacy to advanced carbon accounting and MRV systems, ensuring every learner discovers a clear pathway into the climate economy. Whether you are starting your sustainability journey or strengthening professional expertise, Eco-Mentor is designed to meet your goals — and prepare you for where the world is heading.",
   span_1: "Trusted by learners in 27+ countries — and growing.",
 };
 
@@ -27,11 +29,11 @@ export default function AboutEcoMentor(props: AboutEcoMentorProps = {}) {
             {data.h2_1}
           </h2>
 
-          <p className="text-lg leading-relaxed mb-4 text-gray-700">
+          <p className="text-lg leading-relaxed mb-4 text-gray-700 text-justify">
             {data.p_1}
           </p>
 
-          <p className="text-lg leading-relaxed mb-6 text-gray-700">
+          <p className="text-lg leading-relaxed mb-6 text-gray-700 text-justify">
             {data.p_2}
           </p>
 
@@ -46,7 +48,7 @@ export default function AboutEcoMentor(props: AboutEcoMentorProps = {}) {
         {/* Right Side: Visual */}
         <div className="relative w-full h-80 md:h-[500px]">
           <Image
-            src="/images/impact-earth.jpg"
+            src="/images/impact-earth.webp"
             alt="Global climate education visual"
             fill
             className="object-cover rounded-xl shadow-lg"

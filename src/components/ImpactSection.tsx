@@ -44,7 +44,7 @@ export default function ImpactSection(props: ImpactSectionProps = {}) {
         {/* Left: Earth Image */}
         <div className="relative w-full h-80 md:h-[500px]">
           <Image
-            src="/images/impact-earth.jpg"
+            src="/images/impact-earth.webp"
             alt="Earth impact visual"
             fill
             className="object-cover rounded-xl shadow-xl"

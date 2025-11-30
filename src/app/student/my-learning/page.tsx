@@ -28,7 +28,7 @@ export default function MyLearningPage() {
           courseId: enrollment.course?.id,
           title: enrollment.course?.title,
           // ✅ FIX: use correct field name “image” instead of “thumbnail”
-          image: enrollment.course?.image || '/images/default-course.jpg',
+          image: enrollment.course?.image || '/images/default-course.webp',
           progress: enrollment.progress || 0,
           completed: enrollment.completed || false,
           slug: enrollment.course?.slug,

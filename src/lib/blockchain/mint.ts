@@ -28,7 +28,7 @@ export async function mintCertificateOnChain(certificate: any, metadataURI?: str
       const metadata = {
         name: `${certificate.courseTitle} Certificate`,
         description: `Issued to ${certificate.studentName} for completing ${certificate.courseTitle} on Eco-Mentor LMS.`,
-        image: "https://eco-mentor-lms-prod.vercel.app/images/certificate-yellow.png",
+        image: "https://eco-mentor-lms-prod.vercel.app/images/certificate-yellow.webp",
         external_url: certificate.verificationUrl || "https://eco-mentor-lms-prod.vercel.app",
         attributes: [
           { trait_type: "Student", value: certificate.studentName },

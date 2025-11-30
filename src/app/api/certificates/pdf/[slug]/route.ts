@@ -79,7 +79,7 @@ export async function GET(
     const primaryColor = design?.color || "#1B5E20"
     const logoUrl =
       design?.logoUrl ||
-      `${process.env.NEXT_PUBLIC_APP_URL}/eco-mentor-logo.png`
+      `${process.env.NEXT_PUBLIC_APP_URL}/eco-mentor-logo.webp`
     const signatureUrl =
       design?.signatureUrl ||
       `${process.env.NEXT_PUBLIC_APP_URL}/Signature_2.webp`

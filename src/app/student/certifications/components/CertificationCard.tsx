@@ -102,7 +102,7 @@ export default function CertificationCard({ cert }: { cert: Certification }) {
   const imageUrl = (() => {
     if (certData.course?.image?.startsWith('http')) return certData.course.image
     if (certData.course?.image) return supabaseBase + certData.course.image
-    return '/images/certificate-yellow.png'
+    return '/images/certificate-yellow.webp'
   })()
 
   // 📄 PDF download

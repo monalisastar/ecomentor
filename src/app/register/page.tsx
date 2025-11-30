@@ -67,7 +67,7 @@ export default function RegisterPage() {
     <section className="relative min-h-screen flex items-center justify-center bg-black">
       {/* 🌍 Background */}
       <Image
-        src="/images/register-bg.jpg"
+        src="/images/register-bg.webp"
         alt="Register Background"
         fill
         className="object-cover opacity-50"

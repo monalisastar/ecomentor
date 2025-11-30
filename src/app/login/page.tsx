@@ -89,7 +89,7 @@ export default function LoginPage() {
     <section className="relative min-h-screen flex items-center justify-center bg-black">
       {/* 🌍 Background */}
       <Image
-        src="/images/register-bg.jpg"
+        src="/images/register-bg.webp"
         alt="Eco-Mentor Background"
         fill
         className="object-cover opacity-50"

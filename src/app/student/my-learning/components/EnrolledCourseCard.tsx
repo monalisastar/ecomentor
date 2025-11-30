@@ -23,7 +23,7 @@ export default function EnrolledCourseCard({ course }: EnrolledCourseCardProps) 
       ? course.image
       : course.image
       ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${course.image}`
-      : '/images/default-course.jpg'
+      : '/images/default-course.webp'
 
   return (
     <div className="bg-white border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-all transform hover:-translate-y-1.5 overflow-hidden flex flex-col">

@@ -26,7 +26,7 @@ export default function CourseCard({ course, isEnrolled, actionButton }: CourseC
       {/* 📸 Thumbnail */}
       <div className="relative w-full h-40 mb-4">
         <Image
-          src={course.image || '/images/default-course.jpg'}
+          src={course.image || '/images/default-course.webp'}
           alt={course.title}
           fill
           unoptimized   // ✅ disables Next.js optimization for Supabase images

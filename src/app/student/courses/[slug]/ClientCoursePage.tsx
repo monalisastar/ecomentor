@@ -205,7 +205,7 @@ export default function ClientCoursePage({ slug }: { slug: string }) {
     avatar:
       (typeof course.instructor === 'object' && course.instructor.image) ||
       course.instructorAvatar ||
-      '/images/default-instructor.jpg',
+      '/images/default-instructor.webp',
   }
 
   return (

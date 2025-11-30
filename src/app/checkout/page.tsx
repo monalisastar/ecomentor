@@ -1,0 +1,177 @@
+'use client'
+
+import { useParams, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { apiRequest } from '@/lib/api'
+import Image from 'next/image'
+import { Loader2, CheckCircle, CreditCard, Smartphone } from 'lucide-react'
+
+export default function PublicCheckoutPage() {
+  const { slug } = useParams()
+  const router = useRouter()
+
+  const [course, setCourse] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [processing, setProcessing] = useState(false)
+  const [success, setSuccess] = useState(false)
+  const [error, setError] = useState('')
+
+  // Fetch course data
+  useEffect(() => {
+    async function fetchCourse() {
+      try {
+        setLoading(true)
+
+        const res = await fetch(`/api/courses/${slug}`)
+        const data = await res.json()
+
+        if (res.status === 401 || data.error === 'Unauthorized') {
+          // 👇 AUTO REDIRECT TO LOGIN
+          router.push(`/login?redirect=/checkout/${slug}`)
+          return
+        }
+
+        if (!res.ok) throw new Error(data.error || "Failed to load course")
+
+        setCourse(data)
+      } catch (err: any) {
+        console.error(err)
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (slug) fetchCourse()
+  }, [slug, router])
+
+  // Payment logic
+  async function handlePayment(method: 'mpesa' | 'card') {
+    try {
+      setProcessing(true)
+      setError('')
+
+      // Simulate delay
+      await new Promise((r) => setTimeout(r, 1500))
+
+      const res = await apiRequest('enrollments', 'POST', {
+        courseId: course.id,
+        paymentMethod: method,
+        paymentStatus: 'PAID',
+        amountPaid: course.priceUSD,
+      })
+
+      // User not logged in?
+      if (res?.error?.toLowerCase().includes('unauthorized')) {
+        return router.push(`/login?redirect=/checkout/${slug}`)
+      }
+
+      if (res.error) throw new Error(res.error)
+
+      setSuccess(true)
+      setTimeout(() => {
+        router.push(`/student/courses/${slug}`)
+      }, 2000)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  // Loading state
+  if (loading)
+    return (
+      <div className="min-h-screen flex items-center justify-center text-gray-600">
+        <Loader2 className="animate-spin w-6 h-6 mr-2" /> Loading checkout...
+      </div>
+    )
+
+  // If error AND NOT unauthorized (unauthorized is handled above)
+  if (error && !error.toLowerCase().includes('unauthorized'))
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center text-center">
+        <h2 className="text-2xl font-semibold mb-2">Error</h2>
+        <p className="text-gray-600 mb-4">{error}</p>
+        <a
+          href="/courses"
+          className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
+        >
+          Back to Courses
+        </a>
+      </div>
+    )
+
+  // Success screen
+  if (success)
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-green-50 text-center">
+        <CheckCircle className="w-16 h-16 text-green-600 mb-4" />
+        <h2 className="text-2xl font-semibold text-green-700 mb-2">
+          Payment Successful!
+        </h2>
+        <p className="text-gray-600 mb-6">Redirecting you to your course...</p>
+      </div>
+    )
+
+  // Currency logic
+  const conversionRate = 150
+  const usdAmount = course?.priceUSD
+  const kesAmount = usdAmount * conversionRate
+
+  return (
+    <main className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-6 py-12">
+      <div className="max-w-3xl w-full bg-white shadow-md rounded-xl overflow-hidden">
+        <Image
+          src={course.image}
+          alt={course.title}
+          width={1200}
+          height={500}
+          unoptimized
+          className="w-full h-56 object-cover"
+        />
+
+        <div className="p-8 text-center">
+          <h1 className="text-3xl font-semibold mb-3 text-gray-900">
+            {course.title}
+          </h1>
+          <p className="text-gray-600 mb-6">{course.description}</p>
+
+          <div className="bg-gray-100 p-5 rounded-lg mb-8">
+            <p className="text-xl font-semibold text-gray-800">
+              Total Amount:{' '}
+              <span className="text-green-700">
+                KES {kesAmount.toLocaleString()} ({usdAmount} USD)
+              </span>
+            </p>
+          </div>
+
+          {/* Payment Buttons */}
+          <div className="flex flex-col md:flex-row gap-4 justify-center">
+            <button
+              onClick={() => handlePayment('mpesa')}
+              disabled={processing}
+              className="flex items-center justify-center gap-2 px-8 py-3 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700 transition"
+            >
+              {processing ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Smartphone className="w-5 h-5" />
+              )}
+              {processing ? 'Processing...' : 'Pay with M-Pesa'}
+            </button>
+
+            <button
+              onClick={() => handlePayment('card')}
+              disabled={processing}
+              className="flex items-center justify-center gap-2 px-8 py-3 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition"
+            >
+              <CreditCard className="w-5 h-5" />
+              Pay with Card
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+  )
+}

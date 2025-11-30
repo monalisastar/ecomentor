@@ -72,7 +72,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
               {/* Logo */}
               <Link href="/student/dashboard" className="flex items-center gap-2">
                 <img
-                  src="/eco-mentor-logo.png"
+                  src="/eco-mentor-logo.webp"
                   alt="Eco-Mentor Logo"
                   className="w-8 h-8 rounded-md"
                 />

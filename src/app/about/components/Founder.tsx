@@ -21,7 +21,7 @@ export default function Founder() {
           className="flex flex-col items-center md:items-start"
         >
           <Image
-            src="/images/founder.jpg"
+            src="/images/founder.webp"
             alt="Virginia Njeri - Founder"
             width={170}
             height={170}
